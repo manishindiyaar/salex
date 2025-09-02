@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clerk JWT Token Generator</title>
+    <script src="https://unpkg.com/@clerk/clerk-js@4/dist/clerk.browser.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        .container { background: #f5f5f5; padding: 20px; border-radius: 8px; }
+        .token-display { background: #e8f5e8; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .token-text { font-family: monospace; word-break: break-all; background: white; padding: 10px; border-radius: 3px; }
+        button { background: #007cba; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background: #005a87; }
+        .instructions { background: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔑 Clerk JWT Token Generator</h1>
+        <p>This will help you get a JWT token for testing your Salex API.</p>
+        
+        <div class="instructions">
+            <h3>📋 Instructions:</h3>
+            <ol>
+                <li>Click "Sign In" below</li>
+                <li>Create an account or sign in with existing account</li>
+                <li>Copy the JWT token that appears</li>
+                <li>Use it in your API tests</li>
+            </ol>
+        </div>
+
+        <div id="sign-in-area">
+            <button onclick="signIn()">Sign In with Clerk</button>
+            <button onclick="signOut()" style="display:none;" id="signOutBtn">Sign Out</button>
+        </div>
+
+        <div id="token-area" style="display:none;">
+            <div class="token-display">
+                <h3>🎯 Your JWT Token:</h3>
+                <div class="token-text" id="tokenDisplay"></div>
+                <button onclick="copyToken()">📋 Copy Token</button>
+                <button onclick="testToken()">🧪 Test Token</button>
+            </div>
+            
+            <div id="test-results" style="display:none;">
+                <h3>🧪 Test Results:</h3>
+                <div id="testOutput"></div>
+            </div>
+        </div>
+
+        <div id="usage-instructions" style="display:none;">
+            <div class="instructions">
+                <h3>🚀 How to use this token:</h3>
+                <p><strong>In your terminal:</strong></p>
+                <code id="terminalCommand">export CLERK_JWT_TOKEN="your_token_here"</code>
+                <br><br>
+                <p><strong>Then run your tests:</strong></p>
+                <code>node run-all-auth-tests.js</code>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const clerk = window.Clerk;
+        let currentToken = null;
+
+        // Initialize Clerk with your publishable key
+        clerk.load({
+            publishableKey: 'pk_test_bGlnaHQtY2hpcG11bmstOTguY2xlcmsuYWNjb3VudHMuZGV2JA'
+        });
+
+        async function signIn() {
+            try {
+                await clerk.openSignIn();
+            } catch (error) {
+                console.error('Sign in error:', error);
+            }
+        }
+
+        async function signOut() {
+            try {
+                await clerk.signOut();
+                document.getElementById('token-area').style.display = 'none';
+                document.getElementById('usage-instructions').style.display = 'none';
+                document.getElementById('signOutBtn').style.display = 'none';
+                location.reload();
+            } catch (error) {
+                console.error('Sign out error:', error);
+            }
+        }
+
+        function copyToken() {
+            const tokenText = document.getElementById('tokenDisplay').textContent;
+            navigator.clipboard.writeText(tokenText).then(() => {
+                alert('Token copied to clipboard! 📋');
+            });
+        }
+
+        async function testToken() {
+            const testOutput = document.getElementById('testOutput');
+            const testResults = document.getElementById('test-results');
+            
+            testResults.style.display = 'block';
+            testOutput.innerHTML = '⏳ Testing token...';
+            
+            try {
+                const response = await fetch('http://localhost:3000/api/v1/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    testOutput.innerHTML = `
+                        <div style="color: green;">
+                            ✅ Success! Token is working<br>
+                            👤 User ID: ${data.data?.id || 'Not found'}<br>
+                            📱 Phone: ${data.data?.phoneNumber || 'Not found'}<br>
+                            📧 Email: ${data.data?.email || 'Not found'}
+                        </div>
+                    `;
+                } else {
+                    testOutput.innerHTML = `
+                        <div style="color: red;">
+                            ❌ Error: ${data.error || response.statusText}<br>
+                            Status: ${response.status}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                testOutput.innerHTML = `
+                    <div style="color: red;">
+                        ❌ Network Error: ${error.message}<br>
+                        Make sure your API server is running on http://localhost:3000
+                    </div>
+                `;
+            }
+        }
+
+        // Listen for auth state changes
+        clerk.addListener(({ session, user }) => {
+            if (session && user) {
+                // User signed in
+                currentToken = session.getToken();
+                
+                document.getElementById('token-area').style.display = 'block';
+                document.getElementById('usage-instructions').style.display = 'block';
+                document.getElementById('signOutBtn').style.display = 'inline-block';
+                
+                session.getToken().then(token => {
+                    currentToken = token;
+                    document.getElementById('tokenDisplay').textContent = token;
+                    document.getElementById('terminalCommand').textContent = `export CLERK_JWT_TOKEN="${token}"`;
+                });
+            } else {
+                // User signed out or not signed in
+                document.getElementById('token-area').style.display = 'none';
+                document.getElementById('usage-instructions').style.display = 'none';
+                document.getElementById('signOutBtn').style.display = 'none';
+                currentToken = null;
+            }
+        });
+    </script>
+</body>
+</html>

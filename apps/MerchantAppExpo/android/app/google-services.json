@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "778226382275",
+    "project_id": "otpphonevef",
+    "storage_bucket": "otpphonevef.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:778226382275:android:fccc3f60f8c6d191c73976",
+        "android_client_info": {
+          "package_name": "com.salex.merchant"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCAUB5QkuFh2Nc8w10oLYbZBZlUdsf9NIU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

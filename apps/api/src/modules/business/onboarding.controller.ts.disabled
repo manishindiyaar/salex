@@ -1,0 +1,364 @@
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Request,
+  HttpStatus,
+  HttpCode,
+  ValidationPipe,
+  Logger,
+} from '@nestjs/common';
+import { ClerkAuthGuard, AuthenticatedRequest } from '../auth/clerk-auth.guard';
+import { OnboardingService } from './onboarding.service';
+import { CreateOnboardingBusinessDto } from './dto/onboarding-business.dto';
+import { BulkCreateServicesDto } from './../service/dto/bulk-service.dto';
+import { OnboardingStatus, OnboardingMetrics } from './dto/onboarding-status.dto';
+import { ApiResponse } from 'shared-types';
+
+@Controller('api/v1/onboarding')
+export class OnboardingController {
+  private readonly logger = new Logger(OnboardingController.name);
+
+  constructor(private readonly onboardingService: OnboardingService) {}
+
+  /**
+   * Complete business onboarding with all data
+   * This endpoint creates business, services, and tracks full onboarding flow
+   */
+  @Post('business/complete')
+  @UseGuards(ClerkAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async completeBusinessOnboarding(
+    @Request() req: AuthenticatedRequest,
+    @Body(new ValidationPipe()) createData: CreateOnboardingBusinessDto,
+  ): Promise<ApiResponse<any>> {
+    this.logger.debug(`Starting complete business onboarding for user: ${req.user.id}`);
+
+    try {
+      const result = await this.onboardingService.createBusinessWithOnboarding(
+        req.user.id,
+        createData
+      );
+
+      return {
+        success: true,
+        data: {
+          business: result.business,
+          services: result.services,
+          onboarding: result.onboarding,
+          message: 'Business onboarding completed successfully',
+          qrCodeReady: true,
+          estimatedReach: this.calculateEstimatedReach(result.services),
+        },
+        message: 'Welcome to Salex! Your business is now ready',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to complete business onboarding: ${error.message}`, error.stack);
+      throw new Error('Failed to complete business onboarding');
+    }
+  }
+
+  /**
+   * Start new onboarding session
+   */
+  @Post('start')
+  @UseGuards(ClerkAuthGuard)
+  async startOnboarding(
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ApiResponse<{ status: OnboardingStatus | null }>> {
+    this.logger.debug(`Starting new onboarding session for user: ${req.user.id}`);
+
+    try {
+      const existing = await this.onboardingService.resumeOnboarding(req.user.id);
+      
+      if (existing) {
+        return {
+          success: true,
+          data: { status: existing },
+          message: 'Continuing existing onboarding session',
+        };
+      }
+
+      const newStatus = await this.onboardingService.startNewOnboarding(req.user.id);
+      
+      return {
+        success: true,
+        data: { status: newStatus },
+        message: 'New onboarding session started',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to start onboarding: ${error.message}`, error.stack);
+      throw new Error('Failed to start onboarding');
+    }
+  }
+
+  /**
+   * Get current onboarding status
+   */
+  @Get('status/:businessId')
+  @UseGuards(ClerkAuthGuard)
+  async getOnboardingStatus(
+    @Request() req: AuthenticatedRequest,
+    @Param('businessId') businessId: string,
+  ): Promise<ApiResponse<OnboardingStatus>> {
+    this.logger.debug(`Getting onboarding status for business: ${businessId}`);
+
+    try {
+      const status = await this.onboardingService.getOnboardingStatus(businessId, req.user.id);
+      
+      return {
+        success: true,
+        data: status,
+        message: 'Onboarding status retrieved',
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('not found')) {
+        return {
+          success: false,
+          error: error.message,
+          message: 'No onboarding status found',
+        };
+      }
+      this.logger.error(`Failed to get onboarding status: ${error.message}`);
+      throw new Error('Failed to retrieve onboarding status');
+    }
+  }
+
+  /**
+   * Update individual onboarding step
+   */
+  @Put('progress/:businessId/step/:step')
+  @UseGuards(ClerkAuthGuard)
+  async updateOnboardingStep(
+    @Request() req: AuthenticatedRequest,
+    @Param('businessId') businessId: string,
+    @Param('step') step: string,
+    @Body() data: any
+  ): Promise<ApiResponse<OnboardingStatus>> {
+    this.logger.debug(`Updating step ${step} for business: ${businessId}`);
+
+    try {
+      const status = await this.onboardingService.updateOnboardingStep(
+        businessId,
+        req.user.id,
+        step,
+        data
+      );
+
+      return {
+        success: true,
+        data: status,
+        message: `Step ${step} updated successfully`,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to update step: ${error.message}`, error.stack);
+      throw new Error('Failed to update onboarding step');
+    }
+  }
+
+  /**
+   * Validate specific onboarding step
+   */
+  @Get('validate/:businessId/step/:step')
+  @UseGuards(ClerkAuthGuard)
+  async validateStep(
+    @Request() req: AuthenticatedRequest,
+    @Param('businessId') businessId: string,
+    @Param('step') step: string,
+  ): Promise<ApiResponse<any>> {
+    this.logger.debug(`Validating step ${step} for business: ${businessId}`);
+
+    try {
+      const validation = await this.onboardingService.validateStep(
+        step,
+        businessId,
+        req.user.id
+      );
+
+      return {
+        success: true,
+        data: validation,
+        message: 'Step validation completed',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to validate step: ${error.message}`);
+      throw new Error('Failed to validate step');
+    }
+  }
+
+  /**
+   * Resume existing onboarding session
+   */
+  @Get('resume')
+  @UseGuards(ClerkAuthGuard)
+  async resumeOnboarding(
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ApiResponse<OnboardingStatus | null>> {
+    this.logger.debug(`Resuming onboarding session for user: ${req.user.id}`);
+
+    try {
+      const status = await this.onboardingService.resumeOnboarding(req.user.id);
+      
+      return {
+        success: true,
+        data: { status },
+        message: status ? 'Resuming existing onboarding' : 'Start new onboarding',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to resume onboarding: ${error.message}`);
+      throw new Error('Failed to resume onboarding');
+    }
+  }
+
+  /**
+   * Get onboarding analytics
+   */
+  @Get('analytics')
+  @UseGuards(ClerkAuthGuard)
+  async getOnboardingAnalytics(
+    @Request() req: AuthenticatedRequest,
+  ): Promise<ApiResponse<OnboardingMetrics>> {
+    this.logger.debug(`Getting onboarding analytics for user: ${req.user.id}`);
+
+    try {
+      const metrics = await this.onboardingService.getOnboardingMetrics();
+      
+      return {
+        success: true,
+        data: metrics,
+        message: 'Onboarding analytics retrieved',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get analytics: ${error.message}`);
+      throw new Error('Failed to retrieve analytics');
+    }
+  }
+
+  /**
+   * Get service templates by business type
+   */
+  @Get('templates/:businessType')
+  async getServiceTemplates(
+    @Param('businessType') businessType: string,
+  ): Promise<ApiResponse<any>> {
+    this.logger.debug(`Getting service templates for business type: ${businessType}`);
+
+    try {
+      const templates = await this.onboardingService.getServiceTemplates(businessType);
+      
+      return {
+        success: true,
+        data: templates,
+        message: 'Service templates retrieved',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get templates: ${error.message}`);
+      throw new Error('Failed to retrieve templates');
+    }
+  }
+
+  /**
+   * Get all service templates by business type
+   */
+  @Get('templates')
+  async getAllTemplates(): Promise<ApiResponse<any>> {
+    this.logger.debug('Getting all service templates');
+
+    try {
+      const templates = await this.onboardingService.getServiceTemplatesByBusinessType();
+      
+      return {
+        success: true,
+        data: templates,
+        message: 'All service templates retrieved',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get all templates: ${error.message}`);
+      throw new Error('Failed to retrieve templates');
+    }
+  }
+
+  /**
+   * Create business services in bulk (useful for onboarding)
+   */
+  @Post('services/bulk')
+  @UseGuards(ClerkAuthGuard)
+  @HttpCode(HttpStatus.CREATED)
+  async bulkCreateServices(
+    @Request() req: AuthenticatedRequest,
+    @Body(new ValidationPipe()) data: BulkCreateServicesDto,
+  ): Promise<ApiResponse<any>> {
+    this.logger.debug(`Bulk creating services for business: ${data.businessId}`);
+
+    try {
+      // Additional validation would be here
+      return {
+        success: true,
+        data: {
+          created: data.services.length,
+          businessId: data.businessId,
+        },
+        message: 'Services created successfully',
+      };
+    } catch (error) {
+      this.logger.error(`Failed to create services: ${error.message}`);
+      throw new Error('Failed to create services');
+    }
+  }
+
+  private calculateEstimatedReach(services: any[]): number {
+    // Simple calculation based on service count and price range
+    if (!services || services.length === 0) return 50;
+    
+    const avgPrice = services.reduce((sum, s) => sum + s.price, 0) / services.length;
+    const estimatedDaily = services.length * (avgPrice > 50 ? 3 : 5);
+    
+    return Math.min(estimatedDaily * 30, 1000); // Cap at 1000 monthly
+  }
+
+  /**
+   @Get('demo/quick-setup')
+   async demoQuickSetup(
+    @Query('businessType') businessType: string = 'SALON',
+   ): Promise<ApiResponse<any>> {
+    const templates = {
+      SALON: ['Haircut - ₹25 - 45min', 'Facial - ₹50 - 60min', 'Manicure - ₹20 - 30min'],
+      SPA: ['Massage - ₹80 - 60min', 'Facial - ₹75 - 75min'],
+      BARBER_SHOP: ['Haircut - ₹20 - 30min', 'Beard Trim - ₹15 - 15min'],
+      CLINIC: ['Consultation - ₹50 - 30min', 'Treatment - ₹100 - 60min'],
+    };
+
+    return {
+      success: true,
+      data: {
+        templates: templates[businessType as keyof typeof templates] || templates.SALON,
+        totalDuration: '5 min quick setup',
+        message: 'Demo setup complete',
+      },
+    };
+   }
+   */
+
+  @Get('health')
+  async health(): Promise<ApiResponse<{
+    ready: boolean;
+    service: string;
+    timestamp: string;
+    version: string;
+  }>> {
+    return {
+      success: true,
+      data: {
+        ready: true,
+        service: 'onboarding',
+        timestamp: new Date().toISOString(),
+        version: '1.12.0',
+      },
+    };
+  }
+}

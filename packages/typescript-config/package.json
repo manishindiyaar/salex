@@ -1,0 +1,11 @@
+{
+  "name": "typescript-config",
+  "version": "1.0.0",
+  "description": "Shared TypeScript configuration for Salex monorepo",
+  "main": "base.json",
+  "files": [
+    "base.json",
+    "nextjs.json",
+    "react-library.json"
+  ]
+}

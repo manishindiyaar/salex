@@ -2,7 +2,7 @@
 
 ## REST API Specification
 
-This specification details the API that the React Native Merchant App will use to communicate with the backend for managing a salon. Authentication is handled via a JWT provided by Clerk.
+This specification details the API that the React Native Merchant App will use to communicate with the backend for managing a salon. Authentication is handled via a JWT provided by firebase Auth.
 
 ```yaml
 openapi: 3.0.1
@@ -14,7 +14,7 @@ servers:
   - url: /api/v1
     description: API version 1
 
-# Security Scheme for Clerk JWT
+# Security Scheme for Firebase JWT
 components:
   securitySchemes:
     bearerAuth:
@@ -138,4 +138,4 @@ paths:
               $ref: '#/components/schemas/ServiceCreateInput'
       responses:
         '201':
-          description: Service created successfully.
+          description: Service created successfully.    

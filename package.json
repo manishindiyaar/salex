@@ -1,0 +1,35 @@
+{
+  "name": "salex",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=api",
+    "dev:app": "turbo run dev --filter=merchant-app",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "clean": "turbo run clean",
+    "db:push": "turbo run db:push --filter=api",
+    "db:generate": "turbo run db:generate --filter=api",
+    "db:studio": "turbo run db:studio --filter=api",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "axios": "^1.11.0",
+    "turbo": "^2.0.14",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.7"
+  },
+  "packageManager": "pnpm@8.15.6",
+  "engines": {
+    "node": ">=20.11.0",
+    "pnpm": ">=8.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "git add"
+    ]
+  }
+}

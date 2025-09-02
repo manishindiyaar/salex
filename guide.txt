@@ -1,0 +1,140 @@
+
+pnpm dev:api
+
+To fix "port already in use" error, run this command:
+
+
+lsof -ti :3000 
+kill -9 99577
+lsof -ti :3000 
+
+
+
+  Kill All Node Processes (Nuclear Option)
+
+  pkill -f node
+  # or
+  killall node
+
+
+  --------------
+
+   Kill Server Commands
+
+  Quick Kill (What I just did)
+
+  # Find process using port 3000
+  lsof -ti :3000
+
+  # Kill the process (replace 99577 with the actual PID)
+  kill -9 99577
+
+  One-liner to kill server on port 3000
+
+  kill -9 $(lsof -ti :3000)
+
+  More Gentle Approaches
+
+  # Try graceful shutdown first
+  kill $(lsof -ti :3000)
+
+  # If that doesn't work, force kill
+  kill -9 $(lsof -ti :3000)
+
+  Kill All Node Processes (Nuclear Option)
+
+  pkill -f node
+  # or
+  killall node
+
+  Check What's Running on Port 3000
+
+  # See detailed info about what's using port 3000
+  lsof -i :3000
+
+  # Check all ports in use
+  netstat -tulpn | grep LISTEN
+
+  Now You Can Start Fresh
+
+  The port 3000 is now free, so you can start your server
+  again:
+
+
+
+  --------
+  pnpm dev:app
+  npx react-native run-ios --simulator="iPhone 16"  
+
+
+How to Start Your App Next Time
+
+  You have 2 simple options:
+
+  Option 1: Two-Terminal Approach (Recommended)
+
+  # Terminal 1 - Start Metro bundler
+  cd /Users/manish/Desktop/salex/apps/MerchantApp
+  npm start
+
+  # Terminal 2 - Launch iOS (once Metro is running)
+  cd /Users/manish/Desktop/salex/apps/MerchantApp
+  npx react-native run-ios
+
+  Option 2: One-Command Approach
+
+  cd /Users/manish/Desktop/salex/apps/MerchantApp
+  npx react-native run-ios
+  (This will start Metro automatically)
+
+  For Android Later:
+
+  npx react-native run-android
+
+  Quick Tips:
+
+  - If Metro is already running: Just press i in the Metro terminal to launch iOS
+  - If you make code changes: Press r in Metro terminal to reload, or Cmd+R in
+  simulator
+  - If you get build errors: Usually restarting Metro (Ctrl+C, then npm start)
+  fixes it
+
+  Your "write once, run anywhere" React Native setup is now complete! 🚀
+
+
+
+
+for starting mock Whatsapp UI :
+  cd /Users/manish/Desktop/salex/WhatsappMockUI
+  python3 -m http.server 8080
+
+
+
+  - rm -rf node_modules/.cache
+
+- npx react-native start --reset-cache
+npx tsc --noEmit
+
+
+
+cd /Users/manish/Desktop/salex/apps/MerchantApp && rm -rf ios/build && rm -rf ios/Pods && rm -rf node_modules
+npm i
+cd /Users/manish/Desktop/salex/apps/MerchantApp/ios && pod install
+
+
+open ios/MerchantApp.xcworkspace
+
+
+
+ npx create-expo-app@latest MerchantAppExpo   │
+│    --template typescript       
+
+npx expo install             │
+│   @react-native-firebase/app @react-native-firebase/auth       
+
+
+npx expo install expo-build-properties         
+
+
+
+ cd /Users/manish/Desktop/salex-app/apps/api && npx prisma studio

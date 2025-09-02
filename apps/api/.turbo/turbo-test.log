@@ -1,0 +1,14 @@
+
+
+> api@0.0.1 test /Users/manish/Desktop/salex/apps/api
+> jest
+
+[1m[2mDetermining test suites to run...[22m[22m[999D[K[1mNo tests found, exiting with code 1[22m
+Run with `--passWithNoTests` to exit with code 0
+In [1m/Users/manish/Desktop/salex/apps/api/src[22m
+  20 files checked.
+  testMatch:  - 0 matches
+  testPathIgnorePatterns: [33m/node_modules/[39m - 20 matches
+  testRegex: [33m.*\.spec\.ts$[39m - 0 matches
+Pattern:  - 0 matches
+[41m[30m ELIFECYCLE [39m[49m [31mTest failed. See above for more details.[39m

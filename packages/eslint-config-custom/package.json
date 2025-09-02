@@ -1,0 +1,12 @@
+{
+  "name": "eslint-config-custom",
+  "version": "1.0.0",
+  "description": "Shared ESLint configuration for Salex monorepo",
+  "main": "index.js",
+  "peerDependencies": {
+    "eslint": "^8.42.0"
+  },
+  "files": [
+    "index.js"
+  ]
+}

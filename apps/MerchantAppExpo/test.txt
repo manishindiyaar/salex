@@ -1,0 +1,5 @@
+data: {                                       
+id: 'test-user-id',                         
+firebaseUid: 'test-firebase-uid',           
+phoneNumber: '+1234567890'                  
+}     

@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "baseUrl": ".",
+    "jsx": "react-native",
+    "paths": {
+      "@theme/config": [
+        "./src/theme/config"
+      ],
+      "@components/*": [
+        "./src/components/*"
+      ],
+      "@services/*": [
+        "./src/services/*"
+      ],
+      "@screens/*": [
+        "./src/screens/*"
+      ],
+      "@store/*": [
+        "./src/store/*"
+      ],
+      "@navigation/*": [
+        "./src/navigation/*"
+      ],
+      "@context/*": [
+        "./src/context/*"
+      ],
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "extends": "expo/tsconfig.base"
+}

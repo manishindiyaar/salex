@@ -11,7 +11,7 @@
 **Acceptance Criteria:**
 1.  The `salon-pro` monorepo is created and initialized with Git.
 2.  Turborepo is configured at the root.
-3.  The `apps/api` (NestJS) and `apps/merchant-app` (React Native) workspaces are created.
+3.  The `apps/api` (NestJS) and `apps/MerchantApp` (React Native) workspaces are created.
 4.  The `packages/shared-types`, `packages/eslint-config-custom`, and `packages/typescript-config` workspaces are created.
 5.  Running `pnpm install` at the root successfully installs all dependencies for all workspaces.
 6.  A basic "hello world" or default screen runs for both the API and the merchant app.

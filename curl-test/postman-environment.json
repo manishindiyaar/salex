@@ -1,0 +1,43 @@
+{
+  "id": "salex-api-environment",
+  "name": "Salex API - Development",
+  "values": [
+    {
+      "key": "API_BASE_URL",
+      "value": "http://localhost:3000",
+      "enabled": true,
+      "type": "default"
+    },
+    {
+      "key": "CLERK_JWT_TOKEN",
+      "value": "sess_30XtImo791vpBe53yYfLfGEOJzx",
+      "enabled": true,
+      "type": "secret"
+    },
+    {
+      "key": "BUSINESS_ID",
+      "value": "",
+      "enabled": true,
+      "type": "default"
+    },
+    {
+      "key": "WHATSAPP_WEBHOOK_VERIFY_TOKEN",
+      "value": "my-verify-token",
+      "enabled": true,
+      "type": "default"
+    },
+    {
+      "key": "WHATSAPP_PHONE_NUMBER_ID",
+      "value": "702046082996188",
+      "enabled": true,
+      "type": "default"
+    },
+    {
+      "key": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+      "value": "1828755277851182",
+      "enabled": true,
+      "type": "default"
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}
