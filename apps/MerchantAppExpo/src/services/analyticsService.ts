@@ -1,7 +1,7 @@
 import apiClient from './apiClient';
 import {
   AnalyticsSummary,
-} from '../../../../packages/shared-types/src';
+} from '../types';
 
 const BASE = '/analytics';
 

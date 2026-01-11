@@ -1,7 +1,11 @@
 import { create } from 'zustand';
-import { Business, UpdateBusinessRequest } from '../../../../packages/shared-types/src';
+import { AppState, AppStateStatus } from 'react-native';
+import { Business, UpdateBusinessInput } from '../types';
 import * as BusinessService from '../services/businessService';
 import { showErrorToast, showSuccessToast } from './toastStore';
+
+// Re-export type for backward compatibility
+export type UpdateBusinessRequest = UpdateBusinessInput;
 
 interface BusinessState {
   business: Business | null;
@@ -9,12 +13,13 @@ interface BusinessState {
   updating: boolean;
   updatingHours: boolean;
   fetchMe: () => Promise<void>;
-  update: (businessId: string, dto: UpdateBusinessRequest) => Promise<void>;
+  update: (businessId: string, dto: UpdateBusinessInput) => Promise<void>;
   updateHours: (businessId: string, hoursOfOperation: Record<string, { open: string; close: string; closed: boolean }>) => Promise<void>;
   reset: () => void;
+  setupAppStateListener: () => () => void; // Returns cleanup function
 }
 
-export const useBusinessStore = create<BusinessState>((set) => ({
+export const useBusinessStore = create<BusinessState>((set, get) => ({
   business: null,
   loading: false,
   updating: false,
@@ -66,5 +71,29 @@ export const useBusinessStore = create<BusinessState>((set) => ({
 
   reset() {
     set({ business: null, loading: false, updating: false, updatingHours: false });
+  },
+
+  setupAppStateListener() {
+    let lastAppState = AppState.currentState;
+
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      // Refresh business data when app comes to foreground
+      if (lastAppState.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('📱 App came to foreground, refreshing business data');
+        const { business } = get();
+        if (business) {
+          // Only refresh if we have business data (user is logged in)
+          get().fetchMe();
+        }
+      }
+      lastAppState = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    // Return cleanup function
+    return () => {
+      subscription?.remove();
+    };
   },
 }));

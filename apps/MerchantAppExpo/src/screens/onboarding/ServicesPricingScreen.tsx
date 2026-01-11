@@ -15,8 +15,9 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 
 import { Button, Input, GradientView } from '@components/index';
-import { Colors, Spacing, Typography, BorderRadius } from '@theme/config';
+import { Colors, Spacing, Typography, BorderRadius } from '../../theme/config';
 import { useOnboardingStore } from '@store/onboardingStore';
+import { NicheTemplate } from '@services/templateService';
 // Service interface matching BusinessDraft.services
 interface ServiceDraft {
   id: string;
@@ -37,8 +38,30 @@ interface ServicesPricingScreenProps {
 const ServicesPricingScreen: React.FC<ServicesPricingScreenProps> = ({ navigation }) => {
   const { businessDraft, updateBusinessDraft } = useOnboardingStore();
   
-  // Initialize with existing services or empty array
-  const [services, setServices] = useState<ServiceDraft[]>(businessDraft.services || []);
+  // Initialize with template defaults or existing services
+  const getInitialServices = (): ServiceDraft[] => {
+    // If services already exist in draft, use them
+    if (businessDraft.services && businessDraft.services.length > 0) {
+      return businessDraft.services;
+    }
+    
+    // If template has default services, use them
+    if (businessDraft.template?.defaultServices) {
+      return businessDraft.template.defaultServices.map((service, index) => ({
+        id: (index + 1).toString(),
+        name: service.name,
+        price: service.price,
+        duration: service.duration,
+        category: 'Default',
+        description: `${service.name} service`,
+      }));
+    }
+    
+    // Otherwise start with empty array
+    return [];
+  };
+  
+  const [services, setServices] = useState<ServiceDraft[]>(getInitialServices());
   const [isLoading, setIsLoading] = useState(false);
   const [showAddService, setShowAddService] = useState(false);
   
@@ -57,37 +80,50 @@ const ServicesPricingScreen: React.FC<ServicesPricingScreenProps> = ({ navigatio
     duration?: string;
   }>({});
 
-  // Service templates based on business type
+  // Service templates based on business type and template
   const getServiceTemplates = () => {
+    // First try to get templates from the niche template
+    if (businessDraft.template?.defaultServices) {
+      return businessDraft.template.defaultServices.map((service, index) => ({
+        id: `template-${index}`,
+        name: service.name,
+        price: service.price,
+        duration: service.duration,
+        category: 'Template',
+        description: `${service.name} service`,
+      }));
+    }
+    
+    // Fallback to hardcoded templates based on business type
     const businessType = businessDraft.businessType || 'SALON';
     const templates: Record<string, ServiceDraft[]> = {
       'SALON': [
-        { id: '1', name: 'Haircut & Style', price: 45, duration: 60, category: 'Hair', description: 'Professional haircut with styling' },
-        { id: '2', name: 'Hair Color', price: 85, duration: 120, category: 'Hair', description: 'Full hair coloring service' },
-        { id: '3', name: 'Highlights', price: 95, duration: 150, category: 'Hair', description: 'Partial or full highlights' },
-        { id: '4', name: 'Blowout', price: 35, duration: 45, category: 'Hair', description: 'Professional hair blowout' },
-        { id: '5', name: 'Deep Conditioning', price: 25, duration: 30, category: 'Treatment', description: 'Intensive hair treatment' },
+        { id: '1', name: 'Haircut & Style', price: 300, duration: 60, category: 'Hair', description: 'Professional haircut with styling' },
+        { id: '2', name: 'Hair Color', price: 800, duration: 120, category: 'Hair', description: 'Full hair coloring service' },
+        { id: '3', name: 'Highlights', price: 1200, duration: 150, category: 'Hair', description: 'Partial or full highlights' },
+        { id: '4', name: 'Blowout', price: 200, duration: 45, category: 'Hair', description: 'Professional hair blowout' },
+        { id: '5', name: 'Deep Conditioning', price: 400, duration: 30, category: 'Treatment', description: 'Intensive hair treatment' },
       ],
       'SPA': [
-        { id: '1', name: 'Facial Treatment', price: 75, duration: 60, category: 'Facial', description: 'Deep cleansing facial' },
-        { id: '2', name: 'Full Body Massage', price: 90, duration: 60, category: 'Massage', description: 'Relaxing full body massage' },
-        { id: '3', name: 'Manicure', price: 35, duration: 45, category: 'Nails', description: 'Complete nail care and polish' },
-        { id: '4', name: 'Pedicure', price: 45, duration: 60, category: 'Nails', description: 'Foot care and nail treatment' },
-        { id: '5', name: 'Body Wrap', price: 85, duration: 90, category: 'Treatment', description: 'Detoxifying body treatment' },
+        { id: '1', name: 'Facial Treatment', price: 800, duration: 60, category: 'Facial', description: 'Deep cleansing facial' },
+        { id: '2', name: 'Full Body Massage', price: 1500, duration: 60, category: 'Massage', description: 'Relaxing full body massage' },
+        { id: '3', name: 'Manicure', price: 400, duration: 45, category: 'Nails', description: 'Complete nail care and polish' },
+        { id: '4', name: 'Pedicure', price: 500, duration: 60, category: 'Nails', description: 'Foot care and nail treatment' },
+        { id: '5', name: 'Body Wrap', price: 1200, duration: 90, category: 'Treatment', description: 'Detoxifying body treatment' },
       ],
       'BARBER_SHOP': [
-        { id: '1', name: 'Classic Haircut', price: 25, duration: 30, category: 'Hair', description: 'Traditional men\'s haircut' },
-        { id: '2', name: 'Beard Trim', price: 15, duration: 20, category: 'Grooming', description: 'Professional beard trimming' },
-        { id: '3', name: 'Hot Towel Shave', price: 35, duration: 45, category: 'Shaving', description: 'Traditional straight razor shave' },
-        { id: '4', name: 'Hair Wash & Style', price: 20, duration: 25, category: 'Hair', description: 'Shampoo and styling' },
-        { id: '5', name: 'Mustache Trim', price: 10, duration: 15, category: 'Grooming', description: 'Precision mustache grooming' },
+        { id: '1', name: 'Classic Haircut', price: 150, duration: 30, category: 'Hair', description: 'Traditional men\'s haircut' },
+        { id: '2', name: 'Beard Trim', price: 80, duration: 20, category: 'Grooming', description: 'Professional beard trimming' },
+        { id: '3', name: 'Hot Towel Shave', price: 200, duration: 45, category: 'Shaving', description: 'Traditional straight razor shave' },
+        { id: '4', name: 'Hair Wash & Style', price: 100, duration: 25, category: 'Hair', description: 'Shampoo and styling' },
+        { id: '5', name: 'Mustache Trim', price: 50, duration: 15, category: 'Grooming', description: 'Precision mustache grooming' },
       ],
       'CLINIC': [
-        { id: '1', name: 'Consultation', price: 50, duration: 30, category: 'Consultation', description: 'Initial skin assessment' },
-        { id: '2', name: 'Acne Treatment', price: 85, duration: 45, category: 'Treatment', description: 'Targeted acne therapy' },
-        { id: '3', name: 'Anti-Aging Facial', price: 120, duration: 90, category: 'Facial', description: 'Advanced anti-aging treatment' },
-        { id: '4', name: 'Chemical Peel', price: 95, duration: 60, category: 'Treatment', description: 'Professional chemical peel' },
-        { id: '5', name: 'Microdermabrasion', price: 75, duration: 45, category: 'Treatment', description: 'Skin resurfacing treatment' },
+        { id: '1', name: 'Consultation', price: 500, duration: 30, category: 'Consultation', description: 'Initial skin assessment' },
+        { id: '2', name: 'Acne Treatment', price: 1000, duration: 45, category: 'Treatment', description: 'Targeted acne therapy' },
+        { id: '3', name: 'Anti-Aging Facial', price: 2000, duration: 90, category: 'Facial', description: 'Advanced anti-aging treatment' },
+        { id: '4', name: 'Chemical Peel', price: 1500, duration: 60, category: 'Treatment', description: 'Professional chemical peel' },
+        { id: '5', name: 'Microdermabrasion', price: 1200, duration: 45, category: 'Treatment', description: 'Skin resurfacing treatment' },
       ],
     };
     return templates[businessType] || templates.SALON;
@@ -184,7 +220,7 @@ const ServicesPricingScreen: React.FC<ServicesPricingScreenProps> = ({ navigatio
     // Mock API delay - in production would save to backend
     setTimeout(() => {
       setIsLoading(false);
-      navigation.navigate('BusinessHours');
+      navigation.navigate('ResourceSetup');
     }, 1000);
   };
 
@@ -212,8 +248,8 @@ const ServicesPricingScreen: React.FC<ServicesPricingScreenProps> = ({ navigatio
       </View>
       <View style={styles.serviceDetails}>
         <View style={styles.serviceDetail}>
-          <Icon name="dollar-sign" size={16} color={Colors.PRIMARY} />
-          <Text style={styles.serviceDetailText}>${item.price.toFixed(2)}</Text>
+          <Text style={[styles.serviceDetailText, { color: Colors.PRIMARY }]}>₹</Text>
+          <Text style={styles.serviceDetailText}>{Number(item.price).toFixed(0)}</Text>
         </View>
         <View style={styles.serviceDetail}>
           <Icon name="clock" size={16} color={Colors.PRIMARY} />
@@ -236,7 +272,7 @@ const ServicesPricingScreen: React.FC<ServicesPricingScreenProps> = ({ navigatio
         <Icon name="plus" size={16} color={Colors.PRIMARY} />
       </View>
       <View style={styles.templateDetails}>
-        <Text style={styles.templatePrice}>${item.price.toFixed(2)}</Text>
+        <Text style={styles.templatePrice}>₹{Number(item.price).toFixed(0)}</Text>
         <Text style={styles.templateDuration}>{formatDuration(item.duration)}</Text>
       </View>
     </TouchableOpacity>
@@ -284,6 +320,39 @@ const ServicesPricingScreen: React.FC<ServicesPricingScreenProps> = ({ navigatio
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            {/* Template Defaults Section */}
+            {businessDraft.template?.defaultServices && services.length === 0 && (
+              <View style={styles.section}>
+                <View style={styles.templateDefaultsCard}>
+                  <View style={styles.templateDefaultsHeader}>
+                    <Icon name="star" size={20} color={Colors.PRIMARY} />
+                    <Text style={styles.templateDefaultsTitle}>
+                      Recommended for {businessDraft.template.displayName}
+                    </Text>
+                  </View>
+                  <Text style={styles.templateDefaultsDescription}>
+                    We've pre-selected popular services for your business type. You can customize or add more services.
+                  </Text>
+                  <Button
+                    title="Use Recommended Services"
+                    onPress={() => {
+                      const templateServices = businessDraft.template!.defaultServices.map((service, index) => ({
+                        id: (index + 1).toString(),
+                        name: service.name,
+                        price: service.price,
+                        duration: service.duration,
+                        category: 'Default',
+                        description: `${service.name} service`,
+                      }));
+                      setServices(templateServices);
+                    }}
+                    size="medium"
+                    style={styles.useTemplateButton}
+                  />
+                </View>
+              </View>
+            )}
+
             {/* Current Services */}
             {services.length > 0 && (
               <View style={styles.section}>
@@ -329,7 +398,7 @@ const ServicesPricingScreen: React.FC<ServicesPricingScreenProps> = ({ navigatio
                         setNewService({ ...newService, price: text });
                         if (errors.price) setErrors({ ...errors, price: undefined });
                       }}
-                      placeholder="Price ($)"
+                      placeholder="Price (₹)"
                       error={errors.price}
                       leftIcon="dollar-sign"
                       keyboardType="numeric"
@@ -395,7 +464,10 @@ const ServicesPricingScreen: React.FC<ServicesPricingScreenProps> = ({ navigatio
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Quick Add Templates</Text>
               <Text style={styles.sectionDescription}>
-                Popular services for your business type
+                {businessDraft.template ? 
+                  `Popular services for ${businessDraft.template.displayName}` : 
+                  'Popular services for your business type'
+                }
               </Text>
               <FlatList
                 data={getServiceTemplates()}
@@ -658,6 +730,32 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: Spacing.LG,
     paddingBottom: Spacing.XL,
+  },
+  templateDefaultsCard: {
+    backgroundColor: Colors.SURFACE,
+    borderRadius: BorderRadius.LG,
+    padding: Spacing.LG,
+    borderWidth: 2,
+    borderColor: Colors.PRIMARY + '30',
+  },
+  templateDefaultsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.SM,
+  },
+  templateDefaultsTitle: {
+    ...Typography.H4,
+    color: Colors.TEXT,
+    marginLeft: Spacing.SM,
+  },
+  templateDefaultsDescription: {
+    ...Typography.Body2,
+    color: Colors.TEXT_SECONDARY,
+    lineHeight: 20,
+    marginBottom: Spacing.LG,
+  },
+  useTemplateButton: {
+    alignSelf: 'flex-start',
   },
 });
 

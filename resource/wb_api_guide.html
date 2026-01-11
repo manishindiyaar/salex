@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp API Masterclass | Salex</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --whatsapp-green: #25D366;
+            --whatsapp-teal: #128C7E;
+            --whatsapp-dark: #075E54;
+            --bg: #ffffff;
+            --text: #111b21;
+            --text-secondary: #54656f;
+            --sidebar-bg: #f0f2f5;
+            --border: #e9edef;
+            --code-bg: #1e293b;
+            --card-bg: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            background-color: var(--bg);
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 320px;
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem;
+            background: var(--whatsapp-dark);
+            color: white;
+        }
+
+        .logo {
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin-bottom: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 0.85rem;
+            opacity: 0.9;
+            font-weight: 400;
+        }
+
+        .nav-scroll {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .nav-group {
+            margin-bottom: 2rem;
+        }
+
+        .nav-group-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            font-weight: 700;
+            margin-bottom: 0.75rem;
+            padding-left: 0.75rem;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 0.6rem 0.75rem;
+            color: var(--text);
+            text-decoration: none;
+            border-radius: 0.375rem;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-link:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        .nav-link.active {
+            background-color: #dcf8c6;
+            color: var(--whatsapp-dark);
+            font-weight: 600;
+            border-left-color: var(--whatsapp-green);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 0;
+            scroll-behavior: smooth;
+            background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+            /* WhatsApp Chat BG Pattern */
+            background-blend-mode: overlay;
+            background-color: rgba(255, 255, 255, 0.95);
+        }
+
+        .content-wrapper {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 4rem 3rem;
+        }
+
+        /* Typography */
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            letter-spacing: -1px;
+            color: var(--whatsapp-dark);
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-top: 3.5rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid var(--whatsapp-green);
+            color: var(--text);
+        }
+
+        h3 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--whatsapp-teal);
+        }
+
+        p {
+            line-height: 1.75;
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+            font-size: 1.05rem;
+        }
+
+        /* Cards & Alerts */
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid;
+        }
+
+        .alert-info {
+            background: #e0f2fe;
+            border-color: #0ea5e9;
+            color: #0c4a6e;
+        }
+
+        .alert-warning {
+            background: #fef3c7;
+            border-color: #f59e0b;
+            color: #78350f;
+        }
+
+        .alert-tip {
+            background: #dcf8c6;
+            border-color: #25D366;
+            color: #075E54;
+        }
+
+        /* Chat Bubbles for Examples */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            margin: 2rem 0;
+            padding: 2rem;
+            background: #efe7dd;
+            border-radius: 1rem;
+            border: 1px solid #d1d7db;
+        }
+
+        .chat-bubble {
+            max-width: 70%;
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            position: relative;
+            font-size: 0.95rem;
+            line-height: 1.4;
+            box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+        }
+
+        .chat-bubble.in {
+            align-self: flex-start;
+            background: white;
+            border-top-left-radius: 0;
+        }
+
+        .chat-bubble.out {
+            align-self: flex-end;
+            background: #dcf8c6;
+            border-top-right-radius: 0;
+        }
+
+        .chat-meta {
+            font-size: 0.7rem;
+            color: rgba(0, 0, 0, 0.45);
+            text-align: right;
+            margin-top: 0.25rem;
+        }
+
+        /* Code Blocks */
+        pre {
+            border-radius: 0.75rem !important;
+            margin-bottom: 2rem !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Mermaid */
+        .mermaid {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            margin: 2rem 0;
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <svg viewBox="0 0 33 33" width="24" height="24" fill="white">
+                    <path
+                        d="M16.6 0C7.4 0 0 7.4 0 16.5c0 2.9.8 5.7 2.2 8.2L.6 33l8.5-2.2c2.4 1.3 5.1 2 7.5 2 9.1 0 16.5-7.4 16.5-16.5S25.7 0 16.6 0zm0 29.8c-2.5 0-4.9-.7-7.1-1.9l-.5-.3-5.3 1.4 1.4-5.1-.3-.5C3.7 21.2 3 18.9 3 16.5c0-7.5 6.1-13.6 13.6-13.6s13.6 6.1 13.6 13.6-6.1 13.3-13.6 13.3z" />
+                </svg>
+                Salex WA Guide
+            </div>
+            <div class="subtitle">Cloud API Integration Masterclass</div>
+        </div>
+        <div class="nav-scroll">
+            <div class="nav-group">
+                <div class="nav-group-title">1. Fundamentals</div>
+                <a href="#intro" class="nav-link active">Introduction</a>
+                <a href="#setup" class="nav-link">Setup & Configuration</a>
+                <a href="#webhooks" class="nav-link">Understanding Webhooks</a>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-group-title">2. Payload Anatomy</div>
+                <a href="#payload-text" class="nav-link">Text Messages</a>
+                <a href="#payload-interactive" class="nav-link">Interactive (Buttons/Lists)</a>
+                <a href="#payload-status" class="nav-link">Status Updates</a>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-group-title">3. Salex Implementation</div>
+                <a href="#booking-flow" class="nav-link">The Booking Flow</a>
+                <a href="#state-machine" class="nav-link">State Management</a>
+                <a href="#code-walkthrough" class="nav-link">Code Walkthrough</a>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-group-title">4. Visuals</div>
+                <a href="#visual-flow" class="nav-link">Complete Flow Diagram</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div class="content-wrapper">
+
+            <section id="intro">
+                <h1>WhatsApp Cloud API Masterclass 🟢</h1>
+                <p>Welcome to the definitive guide for integrating WhatsApp into Salex. This document is designed for
+                    developers who are new to the WhatsApp Cloud API. We will cover everything from the basic "Hello
+                    World" to complex interactive booking flows.</p>
+
+                <div class="alert alert-tip">
+                    <strong>Why Cloud API?</strong> Unlike the old "On-Premise" API, the Cloud API is hosted by Meta.
+                    It's free to start, scales automatically, and supports the latest interactive features like List
+                    Messages and Reply Buttons which are crucial for our booking system.
+                </div>
+            </section>
+
+            <section id="setup">
+                <h2>1. Setup & Configuration</h2>
+                <p>Before writing code, you need to configure the Meta Developer Portal.</p>
+                <ol>
+                    <li><strong>Create App:</strong> Go to <a
+                            href="https://developers.facebook.com">developers.facebook.com</a> and create a "Business"
+                        app.</li>
+                    <li><strong>Add WhatsApp:</strong> Add the "WhatsApp" product to your app.</li>
+                    <li><strong>Get Token:</strong> You'll get a temporary access token. For production, you need a
+                        System User token.</li>
+                    <li><strong>Phone Number:</strong> Meta gives you a test number. You must verify your own number to
+                        go live.</li>
+                </ol>
+
+                <h3>Environment Variables</h3>
+                <p>Add these to your `.env` file:</p>
+                <pre><code class="language-bash">WHATSAPP_API_URL=https://graph.facebook.com/v18.0
+WHATSAPP_ACCESS_TOKEN=EAAG...
+WHATSAPP_PHONE_NUMBER_ID=105...
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=my_secret_token</code></pre>
+            </section>
+
+            <section id="webhooks">
+                <h2>2. Understanding Webhooks</h2>
+                <p>WhatsApp doesn't "poll". It "pushes". When a user sends a message, Meta hits your server endpoint
+                    (<code>POST /api/v1/webhooks/whatsapp</code>).</p>
+
+                <h3>Verification (The Handshake)</h3>
+                <p>When you first add the webhook URL in the dashboard, Meta sends a <code>GET</code> request to verify
+                    you own the server.</p>
+                <pre><code class="language-typescript">// NestJS Controller Example
+@Get()
+verifyWebhook(@Query() query: any) {
+  const mode = query['hub.mode'];
+  const token = query['hub.verify_token'];
+  const challenge = query['hub.challenge'];
+
+  if (mode === 'subscribe' && token === process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN) {
+    return challenge; // You MUST return this exact challenge string
+  }
+  throw new ForbiddenException();
+}</code></pre>
+
+                <h3>The Payload Structure</h3>
+                <p>The incoming <code>POST</code> payload is deeply nested. Here is the simplified structure you need to
+                    care about:</p>
+                <pre><code class="language-json">{
+  "object": "whatsapp_business_account",
+  "entry": [{
+    "changes": [{
+      "value": {
+        "messages": [{
+          "from": "919876543210",
+          "id": "wamid.HBgLM...",
+          "timestamp": "169...",
+          "type": "text", // or "interactive", "button", etc.
+          "text": { "body": "Hello" }
+        }],
+        "contacts": [{ "profile": { "name": "Manish" }, "wa_id": "919876543210" }]
+      }
+    }]
+  }]
+}</code></pre>
+            </section>
+
+            <section id="payload-interactive">
+                <h2>3. Interactive Payloads (The Fun Stuff)</h2>
+                <p>Typing is hard. Buttons are easy. Salex relies heavily on <strong>Interactive Messages</strong> to
+                    guide users.</p>
+
+                <h3>Sending a List Message (Service Selection)</h3>
+                <p>Use this when you have 2-10 options (e.g., list of services).</p>
+                <pre><code class="language-json">// Outgoing Payload to Graph API
+{
+  "messaging_product": "whatsapp",
+  "to": "919876543210",
+  "type": "interactive",
+  "interactive": {
+    "type": "list",
+    "header": { "type": "text", "text": "Our Services" },
+    "body": { "text": "Please select a service to book:" },
+    "footer": { "text": "Salex Booking" },
+    "action": {
+      "button": "View Menu",
+      "sections": [
+        {
+          "title": "Hair",
+          "rows": [
+            { "id": "svc_001", "title": "Haircut", "description": "$20 - 30 mins" },
+            { "id": "svc_002", "title": "Coloring", "description": "$50 - 60 mins" }
+          ]
+        }
+      ]
+    }
+  }
+}</code></pre>
+
+                <h3>Receiving the Selection</h3>
+                <p>When the user clicks "Haircut", you get this webhook:</p>
+                <pre><code class="language-json">{
+  "type": "interactive",
+  "interactive": {
+    "type": "list_reply",
+    "list_reply": {
+      "id": "svc_001", // <--- THIS IS WHAT YOU NEED
+      "title": "Haircut",
+      "description": "$20 - 30 mins"
+    }
+  }
+}</code></pre>
+
+                <h3>Sending Reply Buttons (Time Slots)</h3>
+                <p>Use this for up to 3 options (e.g., "Confirm", "Cancel", "Change Time").</p>
+                <pre><code class="language-json">{
+  "type": "interactive",
+  "interactive": {
+    "type": "button",
+    "body": { "text": "Confirm booking for Haircut at 10:00 AM?" },
+    "action": {
+      "buttons": [
+        { "type": "reply", "reply": { "id": "confirm_booking", "title": "✅ Confirm" } },
+        { "type": "reply", "reply": { "id": "cancel_booking", "title": "❌ Cancel" } }
+      ]
+    }
+  }
+}</code></pre>
+            </section>
+
+            <section id="booking-flow">
+                <h2>4. The Salex Booking Flow</h2>
+                <p>This is the core logic you need to implement. We use a <strong>State Machine</strong> pattern to
+                    track where the user is.</p>
+
+                <div class="chat-container">
+                    <div class="chat-bubble in">Hi</div>
+                    <div class="chat-meta">User • 10:00 AM</div>
+
+                    <div class="chat-bubble out">Welcome to Salex! 🌟<br>Please enter the 4-digit Business Code to
+                        start.</div>
+                    <div class="chat-meta">Bot • 10:00 AM</div>
+
+                    <div class="chat-bubble in">1234</div>
+                    <div class="chat-meta">User • 10:01 AM</div>
+
+                    <div class="chat-bubble out"><strong>Luxe Salon</strong><br>Select a service below:</div>
+                    <div class="chat-meta">Bot • 10:01 AM</div>
+
+                    <div class="alert alert-info">User selects "Haircut" from List</div>
+
+                    <div class="chat-bubble out">Great! Select a time for today:</div>
+                    <div class="chat-meta">Bot • 10:02 AM</div>
+
+                    <div class="alert alert-info">User selects "10:00 AM" from List</div>
+
+                    <div class="chat-bubble out">Confirm booking?<br><strong>Haircut @ 10:00 AM</strong></div>
+                    <div class="chat-meta">Bot • 10:02 AM</div>
+                </div>
+            </section>
+
+            <section id="visual-flow">
+                <h2>5. Visual Flow Diagram</h2>
+                <p>Here is the complete logic flow for the <code>processMessage</code> function.</p>
+
+                <div class="mermaid">
+                    stateDiagram-v2
+                    [*] --> GREETING: User sends "Hi"
+
+                    state GREETING {
+                    [*] --> AskCode
+                    AskCode --> ValidateCode: User sends "1234"
+                    }
+
+                    ValidateCode --> BUSINESS_SELECTED: Valid Code
+                    ValidateCode --> GREETING: Invalid Code (Retry)
+
+                    state BUSINESS_SELECTED {
+                    [*] --> ShowServices
+                    ShowServices --> ServiceChosen: User picks List Item
+                    }
+
+                    ServiceChosen --> SLOT_SELECTION
+
+                    state SLOT_SELECTION {
+                    [*] --> FetchSlots
+                    FetchSlots --> ShowSlots
+                    ShowSlots --> SlotChosen: User picks List Item
+                    }
+
+                    SlotChosen --> CONFIRMATION
+
+                    state CONFIRMATION {
+                    [*] --> ShowSummary
+                    ShowSummary --> Booked: User clicks "Confirm"
+                    ShowSummary --> Cancelled: User clicks "Cancel"
+                    }
+
+                    Booked --> [*]: Send Success Msg
+                    Cancelled --> [*]: Send Cancel Msg
+                </div>
+            </section>
+
+            <section id="code-walkthrough">
+                <h2>6. Code Implementation Strategy</h2>
+                <p>Do not write a giant <code>if/else</code> block. Use a router pattern.</p>
+
+                <pre><code class="language-typescript">// whatsapp.service.ts
+
+async processMessage(message: WhatsAppMessage) {
+  // 1. Get User Session
+  let session = await this.sessionService.get(message.from);
+  
+  // 2. Route based on State
+  switch (session.state) {
+    case 'GREETING':
+      return this.handleGreeting(session, message);
+    case 'BUSINESS_SELECTED':
+      return this.handleServiceSelection(session, message);
+    case 'SLOT_SELECTION':
+      return this.handleSlotSelection(session, message);
+    case 'CONFIRMATION':
+      return this.handleConfirmation(session, message);
+    default:
+      return this.resetFlow(session);
+  }
+}
+
+async handleServiceSelection(session, message) {
+  // Check if it's a list reply
+  if (message.type !== 'interactive' || message.interactive.type !== 'list_reply') {
+    return this.sendText(message.from, "Please select a service from the list.");
+  }
+
+  const serviceId = message.interactive.list_reply.id;
+  // Save selection to session
+  await this.sessionService.update(message.from, { 
+    state: 'SLOT_SELECTION', 
+    tempData: { serviceId } 
+  });
+
+  // Fetch slots and send next list
+  const slots = await this.slotService.getSlots(session.businessId);
+  return this.sendSlotList(message.from, slots);
+}</code></pre>
+            </section>
+
+        </div>
+    </main>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#dcf8c6',
+                primaryTextColor: '#075E54',
+                primaryBorderColor: '#25D366',
+                lineColor: '#128C7E',
+                secondaryColor: '#ece5dd',
+                tertiaryColor: '#fff'
+            }
+        });
+
+        // Navigation Highlighting
+        const sections = document.querySelectorAll('section');
+        const navLinks = document.querySelectorAll('.nav-link');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (pageYOffset >= (sectionTop - 150)) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href').includes(current)) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

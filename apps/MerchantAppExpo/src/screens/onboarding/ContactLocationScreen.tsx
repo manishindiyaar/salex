@@ -14,9 +14,10 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 
 import { Button, Input, GradientView } from '@components/index';
-import { Colors, Spacing, Typography, BorderRadius } from '@theme/config';
+import { Colors, Spacing, Typography, BorderRadius } from '../../theme/config';
 import { useOnboardingStore } from '@store/onboardingStore';
 import { updateBusiness } from '@services/businessService';
+import { formatPhoneToE164 } from '../../utils/phoneUtils';
 
 interface ContactLocationScreenProps {
   navigation: {
@@ -105,10 +106,13 @@ const ContactLocationScreen: React.FC<ContactLocationScreenProps> = ({ navigatio
         throw new Error('Business ID not found. Please restart onboarding.');
       }
 
+      // Format phone number to E.164 format (e.g., +919876543210)
+      const formattedPhone = formatPhoneToE164(phoneNumber.trim(), '+91');
+
       // Update the business draft in store
       const updatedDraft = {
-        phone: phoneNumber.trim(),
-        whatsApp: usePhoneForWhatsApp ? phoneNumber.trim() : whatsappNumber.trim(),
+        phone: formattedPhone,
+        whatsApp: usePhoneForWhatsApp ? formattedPhone : formatPhoneToE164(whatsappNumber.trim(), '+91'),
         email: email.trim() || undefined,
         address: {
           street: street.trim(),
@@ -122,11 +126,10 @@ const ContactLocationScreen: React.FC<ContactLocationScreenProps> = ({ navigatio
       updateBusinessDraft(updatedDraft);
 
       // Update business in backend with real API call
-      const fullAddress = `${street.trim()}, ${city.trim()}, ${state.trim()} ${zipCode.trim()}, ${country.trim()}`;
-      
+      // Note: Address is stored in the onboarding draft but not sent to backend
+      // as the Business model doesn't have an address field yet
       await updateBusiness(businessId, {
-        phoneNumber: phoneNumber.trim(), // Use phoneNumber not phone
-        address: fullAddress,
+        phoneNumber: formattedPhone,
       });
 
       console.log('✅ Business contact & location updated successfully');

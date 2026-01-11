@@ -5,7 +5,7 @@ import {
   ViewStyle,
   TouchableOpacity,
 } from 'react-native';
-import { Colors, BorderRadius, Shadows, Spacing } from '@theme/config';
+import { Colors, BorderRadius, Shadows, Spacing } from '../../theme/config';
 
 interface CardProps {
   children: React.ReactNode;

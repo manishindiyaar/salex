@@ -1,11 +1,13 @@
+/**
+ * API Client
+ * 
+ * Centralized HTTP client with JWT token injection.
+ * All API requests should go through this client.
+ */
+
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { API_CONFIG, AUTH_CONFIG } from '../config';
-
-// Source of truth for domain types must come from packages/shared-types
-// Example imports (uncomment/adjust as real types are added/needed):
-// import { ApiResponse, ApiError } from '../../../../packages/shared-types/src';
-
-type Nullable<T> = T | null;
+import { API_CONFIG } from '../config';
+import { useAuthStore } from '../store/authStore';
 
 export interface ApiErrorShape {
   code: string;
@@ -14,7 +16,6 @@ export interface ApiErrorShape {
   status?: number;
 }
 
-// Generic API response wrapper. Prefer replacing with ApiResponse<T> from packages/shared-types when available.
 export interface ApiResponseShape<T> {
   data: T;
   meta?: Record<string, unknown>;
@@ -25,18 +26,13 @@ const DEFAULT_TIMEOUT_MS = API_CONFIG.TIMEOUT_MS;
 
 /**
  * Centralized API Client with:
- * - Firebase JWT injection
+ * - JWT token injection from auth store
  * - Standardized error normalization
  * - Dev logging
  * - Typed helper methods
- *
- * Per architecture docs:
- *  - Use a single axios instance with auth + error interceptors
- *  - Never call axios directly from components; always via services
- *  - Normalize error handling (see docs/architecture/18-error-handling-strategy.md)
  */
 class APIClient {
-  private static _instance: Nullable<APIClient> = null;
+  private static _instance: APIClient | null = null;
   private client: AxiosInstance;
 
   private constructor() {
@@ -59,37 +55,41 @@ class APIClient {
   }
 
   private setupInterceptors() {
-    // Request: conditionally inject Firebase auth token
+    // Request interceptor: inject JWT token
     this.client.interceptors.request.use(async (config) => {
-      // Only include auth headers if authentication is enabled
-      if (API_CONFIG.INCLUDE_AUTH_HEADERS) {
-        // Firebase auth is disabled - this code path is not used in development
-        console.log('[API][AUTH] ⚠️  Firebase auth integration disabled');
-      } else {
-        // Auth disabled - log for development
+      // Get token from auth store
+      const token = useAuthStore.getState().token;
+      
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
         if (__DEV__) {
-          console.log('[API][AUTH] 🔧 Auth disabled - skipping token injection');
+          console.log('[API][AUTH] ✅ Token injected');
+        }
+      } else {
+        if (__DEV__) {
+          console.log('[API][AUTH] ⚠️ No token available');
         }
       }
 
-      // Add request id + basic dev logging
-      (config.headers as Record<string, string>)['x-request-id'] = this.generateRequestId();
+      // Add request id for tracing
+      config.headers['x-request-id'] = this.generateRequestId();
+      
+      // Dev logging
       if (__DEV__) {
-         
         console.log('[API][REQUEST]', config.method?.toUpperCase(), config.url, {
           params: config.params,
           data: config.data,
-          authEnabled: API_CONFIG.INCLUDE_AUTH_HEADERS,
+          hasToken: !!token,
         });
       }
+      
       return config;
     });
 
-    // Response: normalize errors, dev logging, 401 handling hook
+    // Response interceptor: normalize errors, handle 401
     this.client.interceptors.response.use(
       (response) => {
         if (__DEV__) {
-           
           console.log('[API][RESPONSE]', response.config.url, response.status, response.data);
         }
         return response;
@@ -97,16 +97,17 @@ class APIClient {
       async (error: AxiosError) => {
         const normalized = this.normalizeError(error);
 
-        // Example 401 handling strategy: sign out or trigger re-auth flow via a global handler
+        // Handle 401 - token expired or invalid
         if (normalized.status === 401) {
-          // Optionally implement a token refresh strategy here if needed
-          // For now we surface the error to caller to drive UX (e.g., redirect to login)
+          console.log('[API][AUTH] 🔒 Unauthorized - clearing auth');
+          // Clear auth state - user needs to login again
+          useAuthStore.getState().clearAuth();
         }
 
         if (__DEV__) {
-           
           console.warn('[API][ERROR]', normalized);
         }
+        
         return Promise.reject(normalized);
       }
     );
@@ -114,29 +115,25 @@ class APIClient {
 
   private normalizeError(error: AxiosError): ApiErrorShape {
     const status = error.response?.status;
-    // Try to map backend standardized error shape if present
     const data: any = error.response?.data;
-    const code = (data?.code as string) || (error.code ?? 'UNKNOWN');
-    const message =
-      (typeof data?.message === 'string' && data.message) ||
-      (Array.isArray(data?.message) ? data.message.join(', ') : undefined) ||
-      error.message ||
-      'Unexpected error';
+    
+    // Handle backend error format: { success: false, error: { code, message } }
+    const code = data?.error?.code || data?.code || error.code || 'UNKNOWN';
+    const message = data?.error?.message || data?.message || error.message || 'Unexpected error';
 
     return {
       code,
       message,
-      details: data?.details ?? data,
+      details: data,
       status,
     };
   }
 
   private generateRequestId(): string {
-    // Lightweight request id; can be replaced with UUID if desired
     return Math.random().toString(36).slice(2);
   }
 
-  // Helper methods returning typed responses. Replace ApiResponseShape<T> with shared ApiResponse<T> when available.
+  // HTTP methods
   async get<T>(endpoint: string, config?: AxiosRequestConfig): Promise<ApiResponseShape<T>> {
     const res: AxiosResponse<T> = await this.client.get(endpoint, config);
     return { data: res.data };
@@ -152,6 +149,11 @@ class APIClient {
     return { data: res.data };
   }
 
+  async patch<T, B = unknown>(endpoint: string, body?: B, config?: AxiosRequestConfig): Promise<ApiResponseShape<T>> {
+    const res: AxiosResponse<T> = await this.client.patch(endpoint, body, config);
+    return { data: res.data };
+  }
+
   async delete<T>(endpoint: string, config?: AxiosRequestConfig): Promise<ApiResponseShape<T>> {
     const res: AxiosResponse<T> = await this.client.delete(endpoint, config);
     return { data: res.data };
@@ -159,13 +161,4 @@ class APIClient {
 }
 
 export const apiClient = APIClient.instance;
-
-// Usage example in a service module (do not place in components):
-// import { apiClient } from './apiClient';
-// import { SomeType } from '../../../../packages/shared-types/src';
-// export async function getBusiness(id: string) {
-//   const res = await apiClient.get<SomeType>(`/business/${id}`);
-//   return res.data;
-// }
-
 export default apiClient;

@@ -1,0 +1,121 @@
+/**
+ * Application Configuration
+ * 
+ * Centralized configuration with Zod validation.
+ * NEVER use process.env directly in application code.
+ */
+
+import { z } from 'zod';
+
+const configSchema = z.object({
+  // Server
+  nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
+  port: z.coerce.number().default(3001),
+  
+  // Auth toggle for development (set ENABLE_AUTH=false to bypass auth)
+  enableAuth: z.preprocess(
+    (val) => val === undefined ? true : val === 'true' || val === true,
+    z.boolean().default(true)
+  ),
+
+  // Supabase Cloud Database
+  databaseUrl: z.string().min(1, 'DATABASE_URL is required'),
+  directUrl: z.string().min(1, 'DIRECT_URL is required'),
+
+  // Supabase API
+  supabaseUrl: z.string().url('SUPABASE_URL must be a valid URL'),
+  supabaseAnonKey: z.string().min(1, 'SUPABASE_ANON_KEY is required'),
+  supabaseServiceKey: z.string().min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
+  supabaseJwtSecret: z.string().min(1, 'SUPABASE_JWT_SECRET is required'),
+
+  // Twilio (OTP)
+  twilioAccountSid: z.string().optional(),
+  twilioAuthToken: z.string().optional(),
+  twilioVerifyServiceSid: z.string().optional(),
+
+  // Development OTP Bypass
+  devPhoneWhitelist: z.array(z.string()).default([]),
+  devMagicOtp: z.string().default('123456'),
+
+  // WhatsApp
+  whatsappAppSecret: z.string().optional(),
+  whatsappAccessToken: z.string().optional(),
+  whatsappPhoneNumberId: z.string().optional(),
+  whatsappVerifyToken: z.string().optional(),
+  whatsappMode: z.enum(['production', 'simulator']).default('simulator'),
+
+  // Simulator
+  simulatorDefaultBusinessId: z.string().optional(),
+  webhookBaseUrl: z.string().default('http://localhost:3001'),
+});
+
+export type AppConfig = z.infer<typeof configSchema>;
+
+function loadConfig(): AppConfig {
+  const rawConfig = {
+    nodeEnv: process.env.NODE_ENV,
+    port: process.env.PORT,
+    enableAuth: process.env.ENABLE_AUTH,
+
+    databaseUrl: process.env.DATABASE_URL,
+    directUrl: process.env.DIRECT_URL,
+
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+    supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    supabaseJwtSecret: process.env.SUPABASE_JWT_SECRET,
+
+    twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
+    twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
+    twilioVerifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID,
+
+    devPhoneWhitelist: process.env.DEV_PHONE_WHITELIST?.split(',').filter(Boolean) || [],
+    devMagicOtp: process.env.DEV_MAGIC_OTP,
+
+    whatsappAppSecret: process.env.WHATSAPP_APP_SECRET,
+    whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN,
+    whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+    whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
+    whatsappMode: process.env.WHATSAPP_MODE,
+
+    simulatorDefaultBusinessId: process.env.SIMULATOR_DEFAULT_BUSINESS_ID,
+    webhookBaseUrl: process.env.WEBHOOK_BASE_URL,
+  };
+
+  const result = configSchema.safeParse(rawConfig);
+
+  if (!result.success) {
+    console.error('❌ Invalid configuration:');
+    console.error(result.error.format());
+    throw new Error('Configuration validation failed');
+  }
+
+  return result.data;
+}
+
+// Singleton config instance
+let _config: AppConfig | null = null;
+
+export function getConfig(): AppConfig {
+  if (!_config) {
+    _config = loadConfig();
+  }
+  return _config;
+}
+
+// Helper functions
+export function isDevelopment(): boolean {
+  return getConfig().nodeEnv === 'development';
+}
+
+export function isProduction(): boolean {
+  return getConfig().nodeEnv === 'production';
+}
+
+export function isSimulatorMode(): boolean {
+  return getConfig().whatsappMode === 'simulator';
+}
+
+export function isPhoneWhitelisted(phone: string): boolean {
+  return getConfig().devPhoneWhitelist.includes(phone);
+}

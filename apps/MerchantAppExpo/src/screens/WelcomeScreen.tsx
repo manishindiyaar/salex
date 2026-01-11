@@ -13,7 +13,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GradientView } from '../components/ui/GradientView';
 import { Button } from '../components/ui/Button';
-import { Colors, Typography, Spacing, BorderRadius } from '@theme/config';
+import { Colors, Typography, Spacing, BorderRadius } from '../theme/config';
 
 interface WelcomeScreenProps {
   navigation: {

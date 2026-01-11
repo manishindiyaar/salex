@@ -1,144 +1,175 @@
-// Auth Service (Authentication Disabled for Development)
-import { signInWithGoogle, signOutFromGoogle, configureGoogleSignIn } from './googleSignIn';
-import { requestOtp, confirmOtp, verifyWithBackend } from './firebasePhoneAuth';
-import { AUTH_CONFIG } from '../config';
+/**
+ * Auth Service
+ * 
+ * Handles OTP authentication with the Express.js backend.
+ * In development mode, use magic OTP "123456".
+ * 
+ * Backend endpoints:
+ * - POST /api/v1/auth/otp/request - Request OTP
+ * - POST /api/v1/auth/otp/verify - Verify OTP and get JWT token
+ */
 
-// Initialize Google Sign-In configuration only if auth is enabled
-if (AUTH_CONFIG.ENABLE_AUTH) {
-  configureGoogleSignIn();
-} else {
-  console.log('🔧 Auth disabled - skipping Google Sign-In configuration');
+import axios from 'axios';
+import { API_CONFIG, AUTH_CONFIG } from '../config';
+import { useAuthStore, AuthUser } from '../store/authStore';
+
+// Response types matching backend
+interface OtpRequestResponse {
+  success: boolean;
+  data: {
+    message: string;
+  };
 }
+
+interface OtpVerifyResponse {
+  success: boolean;
+  data: {
+    token: string;
+    user: AuthUser;
+  };
+}
+
+interface AuthErrorResponse {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+  };
+}
+
+// Create a separate axios instance for auth (no token injection needed)
+const authClient = axios.create({
+  baseURL: API_CONFIG.BASE_URL,
+  timeout: API_CONFIG.TIMEOUT_MS,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 export const authService = {
-  async sendOTP(phone: string): Promise<{ success: true }> {
-    console.log('📱 Mock: Sending OTP to:', phone);
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(() => resolve(undefined), 1000));
-    return { success: true };
-  },
-
-  async verifyOTP(phone: string, otp: string): Promise<{ user: { id: string; phone: string } }> {
-    console.log('✅ Mock: Verifying OTP:', otp, 'for phone:', phone);
-    // Any 6-digit OTP will work for UI testing
-    await new Promise(resolve => setTimeout(() => resolve(undefined), 800));
-    return { 
-      user: { 
-        id: `user_${Date.now()}`,
-        phone 
-      } 
-    };
-  },
-
-  async resendOTP(phone: string): Promise<Response> {
-    console.log('🔄 Mock: Resending OTP to:', phone);
-    await new Promise(resolve => setTimeout(() => resolve(undefined), 500));
-    return new Response('OK');
-  },
-
-  async createBusiness(userId: string, data: any): Promise<{ id: string }> {
-    console.log('🏢 Creating business for user:', userId, data);
+  /**
+   * Request OTP for phone number
+   * In dev mode, backend uses magic OTP "123456"
+   */
+  async requestOtp(phone: string): Promise<{ success: boolean; message: string }> {
+    console.log('📱 Requesting OTP for:', phone);
     
     try {
-      // Make real API call to create business
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000'}/api/v1/business`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer mock-token-${userId}`, // Backend accepts mock token when auth disabled
-        },
-        body: JSON.stringify({
-          name: data.name || `${data.businessType} Business`,
-          businessType: data.businessType || 'SALON',
-          ...data
-        }),
+      const response = await authClient.post<OtpRequestResponse>('/auth/otp/request', {
+        phone,
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to create business: ${response.status} ${errorText}`);
-      }
-
-      const business = await response.json();
-      console.log('✅ Business created successfully:', business);
-      return { id: business.id };
+      
+      console.log('✅ OTP request successful:', response.data.data.message);
+      return {
+        success: true,
+        message: response.data.data.message,
+      };
     } catch (error: any) {
-      console.error('❌ Business creation failed:', error.message);
-      throw new Error(error.message || 'Failed to create business');
+      console.error('❌ OTP request failed:', error.response?.data || error.message);
+      
+      const errorData = error.response?.data as AuthErrorResponse;
+      return {
+        success: false,
+        message: errorData?.error?.message || 'Failed to send OTP. Please try again.',
+      };
     }
   },
 
-  // Google Sign-In methods
-  async signInWithGoogle(): Promise<{ uid: string; idToken: string }> {
+  /**
+   * Verify OTP and get JWT token
+   * In dev mode, use "123456" as the OTP
+   */
+  async verifyOtp(phone: string, otp: string): Promise<{ 
+    success: boolean; 
+    message: string;
+    token?: string;
+    user?: AuthUser;
+  }> {
+    console.log('🔐 Verifying OTP for:', phone);
+    
     try {
-      const result = await signInWithGoogle();
-      console.log('✅ Google Sign-In successful:', result.uid);
+      const response = await authClient.post<OtpVerifyResponse>('/auth/otp/verify', {
+        phone,
+        otp,
+      });
       
-      // Verify with backend
-      const backendResponse = await verifyWithBackend(result.idToken);
-      console.log('🔄 Backend verification successful:', backendResponse);
+      const { token, user } = response.data.data;
       
-      return result;
+      console.log('✅ OTP verified successfully for user:', user.id);
+      
+      // Store auth in Zustand store (persists to AsyncStorage)
+      useAuthStore.getState().setAuth(token, user);
+      
+      return {
+        success: true,
+        message: 'Phone verified successfully',
+        token,
+        user,
+      };
     } catch (error: any) {
-      console.error('❌ Google Sign-In failed:', error.message);
-      throw error;
+      console.error('❌ OTP verification failed:', error.response?.data || error.message);
+      
+      const errorData = error.response?.data as AuthErrorResponse;
+      return {
+        success: false,
+        message: errorData?.error?.message || 'Invalid OTP. Please try again.',
+      };
     }
   },
 
-  async signOut(): Promise<void> {
+  /**
+   * Get current authenticated user from backend
+   */
+  async getCurrentUser(): Promise<AuthUser | null> {
+    const token = useAuthStore.getState().token;
+    
+    if (!token) {
+      console.log('⚠️ No token available');
+      return null;
+    }
+    
     try {
-      await signOutFromGoogle();
-      console.log('👋 Sign out successful');
+      const response = await authClient.get('/auth/me', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      return response.data.data.user;
     } catch (error: any) {
-      console.error('❌ Sign out failed:', error.message);
-      throw error;
+      console.error('❌ Failed to get current user:', error.response?.data || error.message);
+      return null;
     }
   },
 
-  // Firebase Phone Auth methods  
-  async sendFirebaseOTP(phone: string): Promise<any> {
-    try {
-      const confirmation = await requestOtp(phone);
-      console.log('📱 Firebase OTP sent to:', phone);
-      return confirmation;
-    } catch (error: any) {
-      console.error('❌ Firebase OTP failed:', error.message);
-      throw error;
-    }
+  /**
+   * Logout - clear stored auth
+   */
+  logout(): void {
+    console.log('👋 Logging out...');
+    useAuthStore.getState().clearAuth();
   },
 
-  async verifyFirebaseOTP(confirmation: any, code: string): Promise<{ uid: string; idToken: string }> {
-    try {
-      const result = await confirmOtp(confirmation, code);
-      console.log('✅ Firebase OTP verification successful:', result.uid);
-      
-      // Verify with backend
-      const backendResponse = await verifyWithBackend(result.idToken);
-      console.log('🔄 Backend verification successful:', backendResponse);
-      
-      return result;
-    } catch (error: any) {
-      console.error('❌ Firebase OTP verification failed:', error.message);
-      throw error;
-    }
-  }
+  /**
+   * Check if user is authenticated
+   */
+  isAuthenticated(): boolean {
+    return useAuthStore.getState().isAuthenticated;
+  },
+
+  /**
+   * Get stored token
+   */
+  getToken(): string | null {
+    return useAuthStore.getState().token;
+  },
+
+  /**
+   * Get dev magic OTP (for UI hint in dev mode)
+   */
+  getDevMagicOtp(): string {
+    return AUTH_CONFIG.DEV_MAGIC_OTP;
+  },
 };
 
-export interface BusinessServiceResponse {
-  id: string;
-  name: string;
-  businessType: string;
-  phone: string;
-}
-
-export interface CreateBusinessData {
-  businessType: string;
-  name?: string;
-  phone?: string;
-}
-
-// Real service would integrate with backend APIs:
-// - POST /api/v1/auth/phone
-// - POST /api/v1/auth/verify
-// - POST /api/v1/onboarding/business/start
-// - etc.
+export default authService;

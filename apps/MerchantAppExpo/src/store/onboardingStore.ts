@@ -1,10 +1,12 @@
 import { create } from 'zustand';
+import { NicheTemplate } from '../services/templateService';
 
 export interface OnboardingStep {
   id: string;
   label: string;
   completed: boolean;
   data?: any;
+  requiredModule?: string; // Module required for this step
 }
 
 export interface BusinessDraft {
@@ -13,6 +15,7 @@ export interface BusinessDraft {
   tagline?: string;
   description?: string;
   businessType?: string;
+  template?: NicheTemplate | null; // Store the selected niche template
   logo?: string;
   phone?: string;
   whatsApp?: string;
@@ -60,11 +63,13 @@ interface OnboardingStore {
   completeOnboarding: () => void;
   reset: () => void;
   updateAuthStep: (step: string) => void;
+  updateStepsForTemplate: () => void; // New method to update steps based on template
   
   // Computed getters - these will be computed properties
   getProgress: () => number;
   getCompletedStepsCount: () => number;
   getTotalStepsCount: () => number;
+  getVisibleSteps: () => OnboardingStep[]; // New getter for visible steps
 }
 
 export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
@@ -76,6 +81,8 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
     { id: 'business_identity', label: 'Business Identity', completed: false },
     { id: 'contact_location', label: 'Contact & Location', completed: false },
     { id: 'services', label: 'Services & Pricing', completed: false },
+    { id: 'resources', label: 'Resources Setup', completed: false, requiredModule: 'resource_management' },
+    { id: 'staff', label: 'Staff Setup', completed: false, requiredModule: 'staff_management' },
     { id: 'business_hours', label: 'Business Hours', completed: false },
     { id: 'review', label: 'Review & Complete', completed: false },
   ],
@@ -120,6 +127,8 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
         { id: 'business_identity', label: 'Business Identity', completed: false },
         { id: 'contact_location', label: 'Contact & Location', completed: false },
         { id: 'services', label: 'Services & Pricing', completed: false },
+        { id: 'resources', label: 'Resources Setup', completed: false, requiredModule: 'resource_management' },
+        { id: 'staff', label: 'Staff Setup', completed: false, requiredModule: 'staff_management' },
         { id: 'business_hours', label: 'Business Hours', completed: false },
         { id: 'review', label: 'Review & Complete', completed: false },
       ],
@@ -131,17 +140,55 @@ export const useOnboardingStore = create<OnboardingStore>((set, get) => ({
 
   updateAuthStep: (step: string) => set({ currentStep: step }),
 
+  updateStepsForTemplate: () => {
+    const state = get();
+    const template = state.businessDraft.template;
+    
+    if (!template) return;
+    
+    // Filter steps based on enabled modules
+    const enabledModules = template.enabledModules || [];
+    const updatedSteps = state.steps.map(step => {
+      // If step requires a module, check if it's enabled
+      if (step.requiredModule && !enabledModules.includes(step.requiredModule)) {
+        // Skip this step by marking it as completed
+        return { ...step, completed: true };
+      }
+      return step;
+    });
+    
+    set({ steps: updatedSteps });
+  },
+
   getProgress: () => {
     const state = get();
-    const completedSteps = state.steps.filter(step => step.completed).length;
-    return completedSteps / state.steps.length;
+    const visibleSteps = state.getVisibleSteps();
+    const completedSteps = visibleSteps.filter(step => step.completed).length;
+    return completedSteps / visibleSteps.length;
   },
 
   getCompletedStepsCount: () => {
-    return get().steps.filter(step => step.completed).length;
+    const state = get();
+    return state.getVisibleSteps().filter(step => step.completed).length;
   },
 
   getTotalStepsCount: () => {
-    return get().steps.length;
+    const state = get();
+    return state.getVisibleSteps().length;
+  },
+
+  getVisibleSteps: () => {
+    const state = get();
+    const template = state.businessDraft.template;
+    
+    if (!template) return state.steps;
+    
+    const enabledModules = template.enabledModules || [];
+    
+    // Return only steps that don't require modules or have their required module enabled
+    return state.steps.filter(step => {
+      if (!step.requiredModule) return true;
+      return enabledModules.includes(step.requiredModule);
+    });
   },
 }));

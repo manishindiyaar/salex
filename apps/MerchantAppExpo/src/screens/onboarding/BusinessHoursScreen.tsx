@@ -13,8 +13,9 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 
 import { Button, GradientView } from '@components/index';
-import { Colors, Spacing, Typography, BorderRadius } from '@theme/config';
+import { Colors, Spacing, Typography, BorderRadius } from '../../theme/config';
 import { useOnboardingStore } from '@store/onboardingStore';
+import { NicheTemplate } from '@services/templateService';
 
 interface DayHours {
   open: string;
@@ -32,9 +33,20 @@ interface BusinessHoursScreenProps {
 const BusinessHoursScreen: React.FC<BusinessHoursScreenProps> = ({ navigation }) => {
   const { businessDraft, updateBusinessDraft } = useOnboardingStore();
   
-  // Initialize with existing hours or default hours
-  const [hours, setHours] = useState<Record<string, DayHours>>(
-    businessDraft.hoursOfOperation || {
+  // Get default hours from template or fallback
+  const getDefaultHours = (): Record<string, DayHours> => {
+    // If hours already exist in draft, use them
+    if (businessDraft.hoursOfOperation) {
+      return businessDraft.hoursOfOperation;
+    }
+    
+    // If template has default hours, use them
+    if (businessDraft.template?.defaultHours) {
+      return businessDraft.template.defaultHours;
+    }
+    
+    // Otherwise use standard business hours
+    return {
       monday: { open: '09:00', close: '18:00', closed: false },
       tuesday: { open: '09:00', close: '18:00', closed: false },
       wednesday: { open: '09:00', close: '18:00', closed: false },
@@ -42,9 +54,11 @@ const BusinessHoursScreen: React.FC<BusinessHoursScreenProps> = ({ navigation })
       friday: { open: '09:00', close: '18:00', closed: false },
       saturday: { open: '09:00', close: '17:00', closed: false },
       sunday: { open: '', close: '', closed: true },
-    }
-  );
+    };
+  };
   
+  // Initialize with template defaults or existing hours
+  const [hours, setHours] = useState<Record<string, DayHours>>(getDefaultHours());
   const [isLoading, setIsLoading] = useState(false);
 
   const dayNames: Record<string, string> = {
@@ -270,6 +284,29 @@ const BusinessHoursScreen: React.FC<BusinessHoursScreenProps> = ({ navigation })
           style={styles.content}
           showsVerticalScrollIndicator={false}
         >
+          {/* Template Defaults Section */}
+          {businessDraft.template?.defaultHours && (
+            <View style={styles.section}>
+              <View style={styles.templateDefaultsCard}>
+                <View style={styles.templateDefaultsHeader}>
+                  <Icon name="star" size={20} color={Colors.PRIMARY} />
+                  <Text style={styles.templateDefaultsTitle}>
+                    Recommended for {businessDraft.template.displayName}
+                  </Text>
+                </View>
+                <Text style={styles.templateDefaultsDescription}>
+                  We've set typical hours for your business type. You can customize them below.
+                </Text>
+                <Button
+                  title="Use Recommended Hours"
+                  onPress={() => setHours(businessDraft.template!.defaultHours)}
+                  size="medium"
+                  style={styles.useTemplateButton}
+                />
+              </View>
+            </View>
+          )}
+
           {/* Quick Presets */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Quick Setup</Text>
@@ -585,6 +622,32 @@ const styles = StyleSheet.create({
   footer: {
     paddingHorizontal: Spacing.LG,
     paddingBottom: Spacing.XL,
+  },
+  templateDefaultsCard: {
+    backgroundColor: Colors.SURFACE,
+    borderRadius: BorderRadius.LG,
+    padding: Spacing.LG,
+    borderWidth: 2,
+    borderColor: Colors.PRIMARY + '30',
+  },
+  templateDefaultsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.SM,
+  },
+  templateDefaultsTitle: {
+    ...Typography.H4,
+    color: Colors.TEXT,
+    marginLeft: Spacing.SM,
+  },
+  templateDefaultsDescription: {
+    ...Typography.Body2,
+    color: Colors.TEXT_SECONDARY,
+    lineHeight: 20,
+    marginBottom: Spacing.LG,
+  },
+  useTemplateButton: {
+    alignSelf: 'flex-start',
   },
 });
 

@@ -1,71 +1,43 @@
 "use strict";
-// Core domain types for Salex platform
-// This is the Single Source of Truth for all data models
+/**
+ * @salex/shared-types
+ *
+ * Single source of truth for domain models, DTOs, API contracts,
+ * Prisma client, and Zod validation schemas.
+ *
+ * IMPORTANT: App code must import exclusively from this package.
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WhatsAppBookingAction = exports.WhatsAppNavigationAction = exports.WhatsAppConversationState = exports.MessageType = exports.CustomerSessionState = exports.BookingStatus = exports.BusinessType = void 0;
-var BusinessType;
-(function (BusinessType) {
-    BusinessType["SALON"] = "SALON";
-})(BusinessType || (exports.BusinessType = BusinessType = {}));
-var BookingStatus;
-(function (BookingStatus) {
-    BookingStatus["PENDING"] = "PENDING";
-    BookingStatus["CONFIRMED"] = "CONFIRMED";
-    BookingStatus["CANCELLED_BY_USER"] = "CANCELLED_BY_USER";
-    BookingStatus["CANCELLED_BY_SALON"] = "CANCELLED_BY_SALON";
-    BookingStatus["COMPLETED"] = "COMPLETED";
-})(BookingStatus || (exports.BookingStatus = BookingStatus = {}));
-var CustomerSessionState;
-(function (CustomerSessionState) {
-    CustomerSessionState["INITIAL"] = "INITIAL";
-    CustomerSessionState["BUSINESS_SELECTED"] = "BUSINESS_SELECTED";
-    CustomerSessionState["SERVICE_SELECTION"] = "SERVICE_SELECTION";
-    CustomerSessionState["TIME_SELECTION"] = "TIME_SELECTION";
-    CustomerSessionState["BOOKING_CONFIRMATION"] = "BOOKING_CONFIRMATION";
-    CustomerSessionState["BOOKING_COMPLETE"] = "BOOKING_COMPLETE";
-    CustomerSessionState["EXPIRED"] = "EXPIRED";
-})(CustomerSessionState || (exports.CustomerSessionState = CustomerSessionState = {}));
-var MessageType;
-(function (MessageType) {
-    MessageType["TEXT"] = "text";
-    MessageType["INTERACTIVE_BUTTON"] = "interactive_button";
-    MessageType["INTERACTIVE_LIST"] = "interactive_list";
-    MessageType["SYSTEM"] = "system";
-})(MessageType || (exports.MessageType = MessageType = {}));
-var WhatsAppConversationState;
-(function (WhatsAppConversationState) {
-    WhatsAppConversationState["INITIAL"] = "INITIAL";
-    WhatsAppConversationState["ROUTING_CODE_REQUEST"] = "ROUTING_CODE_REQUEST";
-    WhatsAppConversationState["BUSINESS_CONNECTED"] = "BUSINESS_CONNECTED";
-    WhatsAppConversationState["MAIN_MENU"] = "MAIN_MENU";
-    WhatsAppConversationState["SERVICE_SELECTION"] = "SERVICE_SELECTION";
-    WhatsAppConversationState["TIME_SELECTION"] = "TIME_SELECTION";
-    WhatsAppConversationState["BOOKING_CONFIRMATION"] = "BOOKING_CONFIRMATION";
-    WhatsAppConversationState["BOOKING_COMPLETE"] = "BOOKING_COMPLETE";
-    WhatsAppConversationState["BOOKING_MANAGEMENT"] = "BOOKING_MANAGEMENT";
-    WhatsAppConversationState["VIEW_BOOKINGS"] = "VIEW_BOOKINGS";
-    WhatsAppConversationState["CANCEL_BOOKING"] = "CANCEL_BOOKING";
-    WhatsAppConversationState["CANCEL_CONFIRMATION"] = "CANCEL_CONFIRMATION";
-    WhatsAppConversationState["EXPIRED"] = "EXPIRED";
-})(WhatsAppConversationState || (exports.WhatsAppConversationState = WhatsAppConversationState = {}));
-// WhatsApp Navigation Actions
-var WhatsAppNavigationAction;
-(function (WhatsAppNavigationAction) {
-    WhatsAppNavigationAction["HOME"] = "nav_home";
-    WhatsAppNavigationAction["BACK"] = "nav_back";
-    WhatsAppNavigationAction["MAIN_MENU"] = "nav_main_menu";
-})(WhatsAppNavigationAction || (exports.WhatsAppNavigationAction = WhatsAppNavigationAction = {}));
-// WhatsApp Booking Actions
-var WhatsAppBookingAction;
-(function (WhatsAppBookingAction) {
-    WhatsAppBookingAction["BOOK_SERVICE"] = "book_service";
-    WhatsAppBookingAction["VIEW_BOOKINGS"] = "view_bookings";
-    WhatsAppBookingAction["CANCEL_BOOKING"] = "cancel_booking";
-    WhatsAppBookingAction["SELECT_SERVICE"] = "select_service";
-    WhatsAppBookingAction["SELECT_TIME"] = "select_time";
-    WhatsAppBookingAction["CONFIRM_BOOKING"] = "confirm_booking";
-    WhatsAppBookingAction["CONFIRM_CANCEL"] = "confirm_cancel";
-    WhatsAppBookingAction["ADD_NOTES"] = "add_notes";
-    WhatsAppBookingAction["VIEW_BUSINESS_INFO"] = "view_business_info";
-})(WhatsAppBookingAction || (exports.WhatsAppBookingAction = WhatsAppBookingAction = {}));
-// All types are exported individually above
+exports.getFirstZodError = exports.getZodErrorMessages = exports.formatZodErrors = exports.Prisma = exports.PrismaClient = exports.prisma = void 0;
+// ============================================
+// PRISMA CLIENT & DATABASE
+// ============================================
+var db_1 = require("./db");
+Object.defineProperty(exports, "prisma", { enumerable: true, get: function () { return db_1.prisma; } });
+Object.defineProperty(exports, "PrismaClient", { enumerable: true, get: function () { return db_1.PrismaClient; } });
+Object.defineProperty(exports, "Prisma", { enumerable: true, get: function () { return db_1.Prisma; } });
+// ============================================
+// ZOD SCHEMAS
+// ============================================
+__exportStar(require("./schemas"), exports);
+// ============================================
+// UTILITIES
+// ============================================
+var format_zod_errors_1 = require("./utils/format-zod-errors");
+Object.defineProperty(exports, "formatZodErrors", { enumerable: true, get: function () { return format_zod_errors_1.formatZodErrors; } });
+Object.defineProperty(exports, "getZodErrorMessages", { enumerable: true, get: function () { return format_zod_errors_1.getZodErrorMessages; } });
+Object.defineProperty(exports, "getFirstZodError", { enumerable: true, get: function () { return format_zod_errors_1.getFirstZodError; } });

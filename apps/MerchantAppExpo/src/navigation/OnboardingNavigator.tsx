@@ -10,6 +10,8 @@ import BusinessTypeScreen from '../screens/onboarding/BusinessTypeScreen';
 import BusinessIdentityScreen from '../screens/onboarding/BusinessIdentityScreen';
 import ContactLocationScreen from '../screens/onboarding/ContactLocationScreen';
 import ServicesPricingScreen from '../screens/onboarding/ServicesPricingScreen';
+import ResourceSetupScreen from '../screens/onboarding/ResourceSetupScreen';
+import StaffSetupScreen from '../screens/onboarding/StaffSetupScreen';
 import BusinessHoursScreen from '../screens/onboarding/BusinessHoursScreen';
 import ReviewCompleteScreen from '../screens/onboarding/ReviewCompleteScreen';
 
@@ -22,6 +24,8 @@ type OnboardingStackParamList = {
   BusinessIdentity: { businessType: string; businessId: string };
   ContactLocation: undefined;
   ServicesPricing: undefined;
+  ResourceSetup: undefined;
+  StaffSetup: undefined;
   BusinessHours: undefined;
   ReviewComplete: undefined;
 };
@@ -46,6 +50,8 @@ const OnboardingNavigator: React.FC = () => {
       <Stack.Screen name="BusinessIdentity" component={BusinessIdentityScreen} />
       <Stack.Screen name="ContactLocation" component={ContactLocationScreen} />
       <Stack.Screen name="ServicesPricing" component={ServicesPricingScreen} />
+      <Stack.Screen name="ResourceSetup" component={ResourceSetupScreen} />
+      <Stack.Screen name="StaffSetup" component={StaffSetupScreen} />
       <Stack.Screen name="BusinessHours" component={BusinessHoursScreen} />
       <Stack.Screen name="ReviewComplete" component={ReviewCompleteScreen} />
       {/* Dev-only quick test route for OTP */}

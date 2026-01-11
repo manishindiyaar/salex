@@ -15,7 +15,8 @@ module.exports = function (api) {
             '@store': './src/store',
             '@navigation': './src/navigation',
             '@context': './src/context',
-            '@': './src'
+            '@': './src',
+            '@salex/shared-types': '../../packages/shared-types/src'
           },
         },
       ],

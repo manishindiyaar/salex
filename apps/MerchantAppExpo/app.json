@@ -1,11 +1,11 @@
 {
   "expo": {
     "name": "otp-test",
-    "slug": "otp-test",
+    "slug": "salex-merchant",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "otptest",
+    "scheme": "salexmerchant",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.otptest.otptest"
+      "bundleIdentifier": "com.salex.merchant"
     },
     "android": {
       "adaptiveIcon": {
@@ -23,7 +23,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.otptest.otptest"
+      "package": "com.salex.merchant"
     },
     "web": {
       "bundler": "metro",

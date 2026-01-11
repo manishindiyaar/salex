@@ -1,10 +1,14 @@
 import apiClient from './apiClient';
 import {
   Business,
-  CreateBusinessRequest,
-  UpdateBusinessRequest,
+  CreateBusinessInput,
+  UpdateBusinessInput,
   Paginated,
-} from '../../../../packages/shared-types/src';
+} from '../types';
+
+// Re-export types for backward compatibility
+export type CreateBusinessRequest = CreateBusinessInput;
+export type UpdateBusinessRequest = UpdateBusinessInput;
 
 /**
  * Business service routes all network calls through the centralized API client.
@@ -23,18 +27,18 @@ const BASE = '/businesses';
 
 export async function createBusiness(payload: CreateBusinessRequest) {
   const res = await apiClient.post<any, CreateBusinessRequest>(`${BASE}`, payload);
-  // Backend returns {data: Business, message: string, success: boolean}
-  // API client wraps it as {data: {data: Business, message: string, success: boolean}}
-  // So we need to extract res.data.data to get the actual business object
-  return res.data.data;
+  // Backend returns {success: true, data: {business: {...}}}
+  // API client wraps it as {data: {success, data: {business}}}
+  // So we need to extract res.data.data.business to get the actual business object
+  return res.data.data.business;
 }
 
 export async function updateBusiness(id: string, payload: UpdateBusinessRequest) {
-  const res = await apiClient.put<any, UpdateBusinessRequest>(`${BASE}/${id}`, payload);
-  // Backend returns {data: Business, message: string, success: boolean}
-  // API client wraps it as {data: {data: Business, message: string, success: boolean}}
-  // So we need to extract res.data.data to get the actual business object
-  return res.data.data;
+  const res = await apiClient.patch<any, UpdateBusinessRequest>(`${BASE}/${id}`, payload);
+  // Backend returns {success: true, data: {business: {...}}}
+  // API client wraps it as {data: {success, data: {business}}}
+  // So we need to extract res.data.data.business to get the actual business object
+  return res.data.data.business;
 }
 
 /**
@@ -43,10 +47,10 @@ export async function updateBusiness(id: string, payload: UpdateBusinessRequest)
  */
 export async function getBusinessMe() {
   const res = await apiClient.get<any>(`/businesses/me`);
-  // Backend returns {data: Business, message: string, success: boolean}
-  // API client wraps it as {data: {data: Business, message: string, success: boolean}}
-  // So we need to extract res.data.data to get the actual business object
-  return res.data.data;
+  // Backend returns {success: true, data: {business: {...}}}
+  // API client wraps it as {data: {success, data: {business}}}
+  // So we need to extract res.data.data.business to get the actual business object
+  return res.data.data.business;
 }
 
 /**
@@ -55,10 +59,10 @@ export async function getBusinessMe() {
  */
 export async function getBusiness(id: string) {
   const res = await apiClient.get<any>(`${BASE}/${id}`);
-  // Backend returns {data: Business, message: string, success: boolean}
-  // API client wraps it as {data: {data: Business, message: string, success: boolean}}
-  // So we need to extract res.data.data to get the actual business object
-  return res.data.data;
+  // Backend returns {success: true, data: {business: {...}}}
+  // API client wraps it as {data: {success, data: {business}}}
+  // So we need to extract res.data.data.business to get the actual business object
+  return res.data.data.business;
 }
 
 /**
@@ -76,14 +80,14 @@ export async function getBusinessQrCode(businessId: string) {
 
 /**
  * Update business hours
- * PUT /businesses/:businessId/hours
+ * PATCH /businesses/:businessId (with hoursOfOperation field)
  */
 export async function updateBusinessHours(businessId: string, hoursOfOperation: Record<string, { open: string; close: string; closed: boolean }>) {
-  const res = await apiClient.put<any>(`${BASE}/${businessId}/hours`, { hoursOfOperation });
-  // Backend returns {data: Business, message: string, success: boolean}
-  // API client wraps it as {data: {data: Business, message: string, success: boolean}}
-  // So we need to extract res.data.data to get the actual business object
-  return res.data.data;
+  const res = await apiClient.patch<any>(`${BASE}/${businessId}`, { hoursOfOperation });
+  // Backend returns {success: true, data: {business: {...}}}
+  // API client wraps it as {data: {success, data: {business}}}
+  // So we need to extract res.data.data.business to get the actual business object
+  return res.data.data.business;
 }
 
 export interface ListBusinessParams {

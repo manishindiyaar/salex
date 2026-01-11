@@ -14,7 +14,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 
 import { Button, Input, GradientView } from '@components/index';
-import { Colors, Spacing, Typography, BorderRadius } from '@theme/config';
+import { Colors, Spacing, Typography, BorderRadius } from '../../theme/config';
 import { useOnboardingStore } from '@store/onboardingStore';
 import { updateBusiness } from '@services/businessService';
 

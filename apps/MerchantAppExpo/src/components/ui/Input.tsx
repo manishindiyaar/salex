@@ -8,7 +8,7 @@ import {
   TextInputProps,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { Colors, Typography, BorderRadius, Spacing } from '@theme/config';
+import { Colors, Typography, BorderRadius, Spacing } from '../../theme/config';
 
 interface InputProps extends TextInputProps {
   label?: string;

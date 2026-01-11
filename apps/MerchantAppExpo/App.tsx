@@ -1,12 +1,11 @@
 import React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { StatusBar } from 'react-native';
+import { StatusBar, View, Text } from 'react-native';
 import { NavigationContainer, DefaultTheme as NavigationDefaultTheme, Theme as NavigationTheme } from '@react-navigation/native';
 import { Provider as PaperProvider, MD3LightTheme as PaperDefaultTheme } from 'react-native-paper';
 import RootNavigator from './src/navigation/RootNavigator';
 import { AuthProvider } from './src/context/AuthContext';
 import ToastHost from './src/components/ToastHost';
-import DevBanner from './src/components/DevBanner';
 import { Colors } from './src/theme/config';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
@@ -19,6 +18,7 @@ type PaperTheme = typeof PaperDefaultTheme;
  * - Migrated to Expo for better developer experience
  * - Firebase Phone Authentication integrated
  * - All existing screens and components preserved
+ * - Category-based dynamic UI system integrated
  */
 export default function App() {
   // Ensure vector icon font is loaded (no-op after first mount)
@@ -52,16 +52,18 @@ export default function App() {
       notification: Colors.secondary,
     },
   };
-  
+
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="dark-content" />
-      {/* <DevBanner /> */}
       <PaperProvider theme={paperTheme}>
         <AuthProvider>
-          <NavigationContainer theme={navigationTheme}>
-            <RootNavigator />
-          </NavigationContainer>
+          {/* Temporarily disable CategoryProvider to test app loading */}
+          {/* <CategoryProvider businessId="default" fallbackCategory="SALON"> */}
+            <NavigationContainer theme={navigationTheme}>
+              <RootNavigator />
+            </NavigationContainer>
+          {/* </CategoryProvider> */}
         </AuthProvider>
       </PaperProvider>
       <ToastHost />

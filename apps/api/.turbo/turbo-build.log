@@ -1,4 +1,5 @@
 
-> api@0.0.1 build /Users/manish/Desktop/salex/apps/api
-> nest build
+
+> api@1.0.0 build /Users/manish/Desktop/work/salex-app/apps/api
+> tsc
 

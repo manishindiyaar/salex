@@ -15,7 +15,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 
 import { Button, GradientView } from '@components/index';
-import { Colors, Spacing, Typography, BorderRadius, OnboardingConfig } from '@theme/config';
+import { Colors, Spacing, Typography, BorderRadius, OnboardingConfig } from '../../theme/config';
 import { useOnboardingStore } from '@store/onboardingStore';
 import { authService } from '@services/authService';
 
@@ -82,7 +82,7 @@ const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({ route, na
     setIsLoading(true);
 
     try {
-      const { user } = await authService.verifyOTP(phoneNumber, otpCode);
+      const { user } = await authService.verifyOtp(phoneNumber, otpCode);
       updateAuthStep('auth_complete');
       
       // Create business record and proceed
@@ -101,7 +101,7 @@ const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({ route, na
     setError('');
 
     try {
-      await authService.resendOTP(phoneNumber);
+      await authService.requestOtp(phoneNumber);
       setCountdown(OnboardingConfig.OTP_TIMEOUT_SECONDS);
       Alert.alert('OTP Sent', 'A new OTP has been sent to your number.');
     } catch (error) {

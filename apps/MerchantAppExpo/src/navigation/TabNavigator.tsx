@@ -1,30 +1,41 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { View, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import DashboardScreen from '../screens/main/DashboardScreen';
 import BookingsScreen from '../screens/main/BookingsScreen';
 import ServicesScreen from '../screens/main/ServicesScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
-import DashboardScreen from '../screens/main/DashboardScreen';
-import QrCodeScreen from '../screens/main/QrCodeScreen';
+import { AccountSuspendedScreen } from '../screens/AccountSuspendedScreen';
 import { Colors } from '../theme/config';
+import { useBusinessStore } from '../store/businessStore';
+
+/**
+ * High-Strength 4-Tab Navigation
+ * 
+ * Tab 1: Home (Command Center) - Today's bookings, revenue, chai-break
+ * Tab 2: Bookings - Full booking management with filters
+ * Tab 3: Catalogue (Service Menu) - Manage services and prices
+ * Tab 4: My Account (History) - Revenue summaries, booking history
+ */
 
 export type RootTabParamList = {
   Home: undefined;
   Bookings: undefined;
-  Services: undefined;
-  Profile: undefined;
-  QrCode: undefined;
+  Catalogue: undefined;
+  MyAccount: undefined;
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
-/**
- * NOTE:
- * - Registered Bookings, Services, and Business Profile screens wired to Zustand stores.
- * - Kept a Home/Welcome route (can be replaced with dashboard if desired).
- * - This navigator is imported from App.tsx.
- */
 export default function TabNavigator() {
+  const { business } = useBusinessStore();
+
+  // Check if business is deactivated
+  if (business && business.isActive === false) {
+    return <AccountSuspendedScreen businessName={business.name} />;
+  }
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -32,24 +43,34 @@ export default function TabNavigator() {
           let iconName = 'home';
 
           if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home';
+            iconName = 'home';
           } else if (route.name === 'Bookings') {
-            iconName = focused ? 'calendar' : 'calendar';
-          } else if (route.name === 'Services') {
-            iconName = focused ? 'scissors' : 'scissors';
-          } else if (route.name === 'Profile') {
-            iconName = focused ? 'user' : 'user';
-          } else if (route.name === 'QrCode') {
-            iconName = focused ? 'square' : 'square';
+            iconName = 'calendar';
+          } else if (route.name === 'Catalogue') {
+            iconName = 'scissors';
+          } else if (route.name === 'MyAccount') {
+            iconName = 'user';
           }
 
-          return <Icon name={iconName} size={size} color={color} />;
+          return (
+            <View style={focused ? styles.activeIconContainer : undefined}>
+              <Icon name={iconName} size={size} color={color} />
+            </View>
+          );
         },
-        tabBarActiveTintColor: Colors.PRIMARY,
+        tabBarActiveTintColor: Colors.SALEX_GREEN,
         tabBarInactiveTintColor: Colors.TEXT_SECONDARY,
         tabBarStyle: {
-          backgroundColor: Colors.SURFACE,
-          borderTopColor: Colors.BORDER,
+          backgroundColor: Colors.BACKGROUND,
+          borderTopColor: Colors.SURFACE,
+          borderTopWidth: 1,
+          height: 60,
+          paddingBottom: 8,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
         },
         headerShown: false,
       })}
@@ -57,16 +78,43 @@ export default function TabNavigator() {
       <Tab.Screen 
         name="Home" 
         component={DashboardScreen} 
-        options={{ title: 'Dashboard' }}
+        options={{ 
+          title: 'Home',
+          tabBarLabel: 'Home',
+        }}
       />
-      <Tab.Screen name="Bookings" component={BookingsScreen} />
-      <Tab.Screen name="Services" component={ServicesScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
       <Tab.Screen 
-        name="QrCode" 
-        component={QrCodeScreen} 
-        options={{ title: 'QR Code' }}
+        name="Bookings" 
+        component={BookingsScreen} 
+        options={{ 
+          title: 'Bookings',
+          tabBarLabel: 'Bookings',
+        }}
+      />
+      <Tab.Screen 
+        name="Catalogue" 
+        component={ServicesScreen} 
+        options={{ 
+          title: 'Catalogue',
+          tabBarLabel: 'Catalogue',
+        }}
+      />
+      <Tab.Screen 
+        name="MyAccount" 
+        component={ProfileScreen} 
+        options={{ 
+          title: 'My Account',
+          tabBarLabel: 'My Account',
+        }}
       />
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  activeIconContainer: {
+    backgroundColor: 'rgba(0, 255, 0, 0.1)',
+    borderRadius: 8,
+    padding: 4,
+  },
+});

@@ -4,7 +4,7 @@ import {
   CreateServiceRequest,
   UpdateServiceRequest,
   Paginated,
-} from '../../../../packages/shared-types/src';
+} from '../types';
 
 /**
  * NOTE: Merchant-only endpoints alignment (see docs/architecture/05-api-specification.md)
@@ -32,24 +32,28 @@ export interface ListServiceParams {
  * Spec: POST /businesses/{businessId}/services
  */
 export async function createBusinessService(businessId: string, payload: Omit<CreateServiceRequest, 'businessId'>) {
-  const res = await apiClient.post<Service, Omit<CreateServiceRequest, 'businessId'>>(
+  const res = await apiClient.post<any, Omit<CreateServiceRequest, 'businessId'>>(
     `/businesses/${businessId}/services`,
     payload
   );
-  return res.data;
+  // Backend returns {success: true, data: {service: {...}}}
+  // API client wraps it as {data: {success, data: {service}}}
+  return res.data.data.service;
 }
 
 /**
  * Legacy/flat create (out of spec). Keep only if backend supports it.
  */
 export async function createService(payload: CreateServiceRequest) {
-  const res = await apiClient.post<Service, CreateServiceRequest>(`${BASE}`, payload);
-  return res.data;
+  const res = await apiClient.post<any, CreateServiceRequest>(`${BASE}`, payload);
+  // Backend returns {success: true, data: {service: {...}}}
+  return res.data.data?.service || res.data;
 }
 
 export async function updateService(id: string, payload: UpdateServiceRequest) {
-  const res = await apiClient.put<Service, UpdateServiceRequest>(`${BASE}/${id}`, payload);
-  return res.data;
+  const res = await apiClient.put<any, UpdateServiceRequest>(`${BASE}/${id}`, payload);
+  // Backend returns {success: true, data: {service: {...}}}
+  return res.data.data.service;
 }
 
 /**
@@ -57,16 +61,18 @@ export async function updateService(id: string, payload: UpdateServiceRequest) {
  * Spec: PUT /businesses/{businessId}/services/{serviceId}
  */
 export async function updateBusinessService(businessId: string, serviceId: string, payload: any) {
-  const res = await apiClient.put<Service, any>(
+  const res = await apiClient.put<any, any>(
     `/businesses/${businessId}/services/${serviceId}`,
     payload
   );
-  return res.data;
+  // Backend returns {success: true, data: {service: {...}}}
+  return res.data.data.service;
 }
 
 export async function getService(id: string) {
-  const res = await apiClient.get<Service>(`${BASE}/${id}`);
-  return res.data;
+  const res = await apiClient.get<any>(`${BASE}/${id}`);
+  // Backend returns {success: true, data: {service: {...}}}
+  return res.data.data.service;
 }
 
 /**
@@ -96,7 +102,14 @@ export async function getBusinessService(businessId: string, serviceId: string) 
  * Spec: GET /businesses/{businessId}/services
  */
 export async function listBusinessServices(businessId: string, params: Omit<ListServiceParams, 'businessId'> = {}) {
-  const res = await apiClient.get<any>(`/businesses/${businessId}/services`, { params });
+  console.log('🔍 Fetching services for business:', businessId, 'params:', params);
+  const res = await apiClient.get<any>(`/businesses/${businessId}/services`, { 
+    params: {
+      page: params.page || 1,
+      pageSize: params.pageSize || 50,
+    }
+  });
+  console.log('📦 Raw API response:', JSON.stringify(res, null, 2));
   // Backend returns {data: ServicesResponse, message: string, success: boolean}
   // API client wraps it as {data: {data: ServicesResponse, message: string, success: boolean}}
   // So we need to extract res.data.data to get the actual services data

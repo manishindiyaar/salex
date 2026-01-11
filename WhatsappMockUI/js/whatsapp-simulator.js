@@ -11,7 +11,7 @@ class WhatsAppSimulator {
         this.businesses = []; // Will be loaded from database
         this.messages = [];
         this.conversationState = 'greeting';
-        this.apiBaseUrl = 'http://localhost:3000';
+        this.apiBaseUrl = 'http://localhost:3001';
         
         this.init();
     }

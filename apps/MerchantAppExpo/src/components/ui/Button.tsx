@@ -7,7 +7,7 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { Colors, Typography, BorderRadius, Shadows, TouchTarget } from '@theme/config';
+import { Colors, Typography, BorderRadius, Shadows, TouchTarget } from '../../theme/config';
 
 // TODO: Re-enable once LinearGradient native module is configured
 // import LinearGradient from 'react-native-linear-gradient';

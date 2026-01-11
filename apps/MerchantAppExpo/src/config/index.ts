@@ -9,36 +9,31 @@
 const isDev = __DEV__;
 
 // Authentication Toggle Configuration
-// Set to false for development/testing to skip Firebase authentication
-// Set to true for production to enable full authentication flow
+// Auth is ALWAYS enabled - we use real OTP flow
 export const AUTH_CONFIG = {
-  // For development, we can disable auth to match backend ENABLE_AUTH=false
-  ENABLE_AUTH: isDev ? false : true,
+  // Always enable auth - use real OTP flow with backend
+  ENABLE_AUTH: true,
   
-  // Mock user data when auth is disabled
-  MOCK_USER: {
-    uid: 'test-user-id',
-    phoneNumber: '+1234567890',
-    displayName: 'Test User',
-  },
+  // Dev mode uses magic OTP "123456" on backend
+  DEV_MAGIC_OTP: '123456',
 } as const;
 
 // API Configuration
 export const API_CONFIG = {
   BASE_URL: isDev 
-    ? 'http://localhost:3000/api/v1'
+    ? 'http://localhost:3001/api/v1'
     : 'https://api.salex.app/api/v1',
   
   TIMEOUT_MS: 10000,
   
-  // Skip token injection when auth is disabled
-  INCLUDE_AUTH_HEADERS: AUTH_CONFIG.ENABLE_AUTH,
+  // Always include auth headers when we have a token
+  INCLUDE_AUTH_HEADERS: true,
 } as const;
 
 // App Configuration
 export const APP_CONFIG = {
-  // Skip onboarding/auth screens when auth is disabled
-  SKIP_AUTH_SCREENS: !AUTH_CONFIG.ENABLE_AUTH,
+  // Never skip auth screens - always require login
+  SKIP_AUTH_SCREENS: false,
   
   // Development helpers
   ENABLE_DEV_LOGS: isDev,

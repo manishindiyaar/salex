@@ -27,6 +27,9 @@
       ],
       "@/*": [
         "./src/*"
+      ],
+      "@salex/shared-types": [
+        "../../packages/shared-types/src"
       ]
     }
   },

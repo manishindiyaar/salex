@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Paginated, Service, CreateServiceRequest } from '../../../../packages/shared-types/src';
+import { Paginated, Service, CreateServiceInput } from '../types';
 import { 
   listBusinessServices, 
   createBusinessService, 
@@ -23,7 +23,7 @@ interface ServiceState {
   currentBusinessId?: string; // Track current business ID for updates
 
   listByBusiness: (businessId: string, params?: { page?: number; pageSize?: number; search?: string }) => Promise<void>;
-  createForBusiness: (businessId: string, dto: Omit<CreateServiceRequest, 'businessId'>) => Promise<Service | null>;
+  createForBusiness: (businessId: string, dto: Omit<CreateServiceInput, 'businessId'>) => Promise<Service | null>;
   updateOne: (id: string, dto: Partial<Service>) => Promise<Service | null>;
   deleteOne: (id: string) => Promise<boolean>;
   reset: () => void;
@@ -43,21 +43,23 @@ export const useServiceStore = create<ServiceState>((set, get) => ({
   async listByBusiness(businessId, params = {}) {
     try {
       set({ loading: true });
+      console.log('🔍 Loading services for business:', businessId);
       const res = await listBusinessServices(businessId, params);
+      console.log('📦 Services API response:', JSON.stringify(res, null, 2));
       
       // Handle the actual API response structure
-      const services = res.services || res.items || [];
-      const total = services.length;
+      const services = res?.services || res?.items || res || [];
+      const total = Array.isArray(services) ? services.length : 0;
+      
+      console.log('✅ Services loaded:', total, 'services', services);
       
       set({
-        items: services,
+        items: Array.isArray(services) ? services : [],
         total: total,
         page: params.page || 1,
         pageSize: params.pageSize || 20,
         currentBusinessId: businessId, // Store the business ID for updates
       });
-      
-      console.log('✅ Services loaded:', services.length, 'services');
     } catch (err: any) {
       console.error('❌ Failed to load services:', err);
       const message = err?.message ?? 'Failed to load services';

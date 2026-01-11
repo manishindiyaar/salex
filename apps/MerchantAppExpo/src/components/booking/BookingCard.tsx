@@ -8,7 +8,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { Card } from '@components/ui/Card';
 import { Button } from '@components/ui/Button';
-import { Colors, Typography, Spacing, BorderRadius } from '@theme/config';
+import { Colors, Typography, Spacing, BorderRadius } from '../../theme/config';
 
 export type BookingStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
 

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 
-import { Colors, Spacing, Typography } from '@theme/config';
+import { Colors, Spacing, Typography } from '../../theme/config';
 import { useAuth } from '../../context/AuthContext';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { createBusinessService } from '../../services/serviceService';

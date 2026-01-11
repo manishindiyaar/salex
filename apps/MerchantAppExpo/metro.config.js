@@ -12,6 +12,7 @@ config.resolver.alias = {
   '@navigation': path.resolve(__dirname, 'src/navigation'),
   '@context': path.resolve(__dirname, 'src/context'),
   '@': path.resolve(__dirname, 'src'),
+  '@salex/shared-types': path.resolve(__dirname, '../../packages/shared-types/src'),
 };
 
 // Enable symlinks for monorepo support

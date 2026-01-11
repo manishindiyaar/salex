@@ -1,14 +1,26 @@
+/**
+ * Auth Context
+ * 
+ * Provides authentication state to the app.
+ * Uses authStore for JWT token management.
+ * Checks business existence to determine onboarding status.
+ */
+
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AUTH_CONFIG } from '../config';
+import { useAuthStore } from '../store/authStore';
+import { useBusinessStore } from '../store/businessStore';
+import { authService } from '../services/authService';
 
 interface AuthContextType {
+  // Auth state
+  isAuthenticated: boolean;
   isOnboarded: boolean;
   isLoadingAuth: boolean;
+  
+  // Actions
   completeOnboarding: () => void;
   logout: () => void;
-  authEnabled: boolean;
-  mockUser: typeof AUTH_CONFIG.MOCK_USER | null;
   hasBusiness: () => Promise<boolean>;
 }
 
@@ -31,90 +43,126 @@ const ONBOARDING_KEY = '@salex_onboarded';
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isOnboarded, setIsOnboarded] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  
+  // Get auth state from Zustand store
+  const { isAuthenticated, isHydrated, clearAuth } = useAuthStore();
+  const { setupAppStateListener } = useBusinessStore();
 
-  // Load persisted onboarding state on app start
+  // Set up app state listener for business data refresh
   useEffect(() => {
-    const loadOnboardingState = async () => {
-      try {
-        // Check if business exists instead of just local storage
-        console.log('🔍 Checking if business exists...');
-        const businessExists = await checkBusinessExists();
-        
-        if (businessExists) {
-          setIsOnboarded(true);
-          console.log('✅ Business exists - user is onboarded');
-        } else {
-          setIsOnboarded(false);
-          console.log('🚀 No business exists - user needs onboarding');
-        }
-      } catch (error) {
-        console.error('Failed to load onboarding state:', error);
-        setIsOnboarded(false); // Default to onboarding on error
-      } finally {
-        setIsLoadingAuth(false);
+    const cleanup = setupAppStateListener();
+    return cleanup; // Cleanup on unmount
+  }, [setupAppStateListener]);
+
+  // Wait for auth store to hydrate, then check business
+  useEffect(() => {
+    const initializeAuth = async () => {
+      // Wait for auth store to rehydrate from AsyncStorage
+      if (!isHydrated) {
+        console.log('⏳ Waiting for auth store to hydrate...');
+        return;
       }
+
+      console.log('🔐 Auth store hydrated, isAuthenticated:', isAuthenticated);
+
+      if (isAuthenticated) {
+        // User has token, check if they have a business
+        console.log('🔍 Checking if business exists...');
+        const hasExistingBusiness = await checkBusinessExists();
+        setIsOnboarded(hasExistingBusiness);
+      } else {
+        // No token, user needs to login
+        setIsOnboarded(false);
+      }
+
+      setIsLoadingAuth(false);
     };
 
-    loadOnboardingState();
-  }, []);
+    initializeAuth();
+  }, [isHydrated, isAuthenticated]);
 
-  // Check if business exists and update onboarding state accordingly
-  const checkBusinessExists = async () => {
+  // Check if business exists via API
+  const checkBusinessExists = async (): Promise<boolean> => {
     try {
       const businessService = require('../services/businessService');
-      const response = await businessService.getBusinessMe();
-      if (response.data) {
+      // getBusinessMe returns the business object directly (or throws on error)
+      const business = await businessService.getBusinessMe();
+      
+      if (business && business.id) {
         await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-        setIsOnboarded(true);
-        console.log('✅ Business exists - marking as onboarded');
+        console.log('✅ Business exists - user is onboarded:', business.id);
         return true;
       }
       return false;
-    } catch (error) {
-      console.error('Error checking business existence:', error);
+    } catch (error: any) {
+      // 401 means not authenticated, 404 means no business
+      if (error.status === 401) {
+        console.log('🔒 Not authenticated');
+        clearAuth();
+      } else {
+        console.log('🚀 No business exists - user needs onboarding');
+      }
       return false;
     }
   };
 
-  // Public method to check business existence from anywhere
-  const hasBusiness = async () => {
+  // Public method to check business existence
+  const hasBusiness = async (): Promise<boolean> => {
     return await checkBusinessExists();
   };
 
+  // Mark onboarding as complete
   const completeOnboarding = async () => {
     try {
-      // Save onboarding completion flag
       await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
       setIsOnboarded(true);
-      
-      console.log('🎉 Onboarding completed! User can now access main app');
+      console.log('🎉 Onboarding completed!');
     } catch (error) {
       console.error('Failed to save onboarding state:', error);
-      // Still set state even if persistence fails
       setIsOnboarded(true);
     }
   };
 
+  // Logout - clear all auth state and reset all stores
   const logout = async () => {
     try {
-      // Always allow logout (even when auth disabled for testing)
-      await AsyncStorage.multiRemove(['@salex_onboarded', 'business_id']);
+      // Clear auth store (JWT token)
+      authService.logout();
+      
+      // Clear local storage
+      await AsyncStorage.multiRemove([ONBOARDING_KEY, 'business_id']);
+      
+      // Reset all Zustand stores to clear stale data
+      // Import stores dynamically to avoid circular dependencies
+      const { useBusinessStore } = require('../store/businessStore');
+      const { useBookingStore } = require('../store/bookingStore');
+      const { useServiceStore } = require('../store/serviceStore');
+      const { useResourceStore } = require('../store/resourceStore');
+      const { useStaffStore } = require('../store/staffStore');
+      const { useOnboardingStore } = require('../store/onboardingStore');
+      
+      // Reset all stores
+      useBusinessStore.getState().reset();
+      useBookingStore.getState().reset();
+      useServiceStore.getState().reset();
+      useResourceStore.getState().reset();
+      useStaffStore.getState().reset();
+      useOnboardingStore.getState().reset();
+      
       setIsOnboarded(false);
-      console.log('👋 User logged out and all data cleared');
+      console.log('👋 User logged out - all stores reset');
     } catch (error) {
-      console.error('Failed to clear onboarding state:', error);
-      // Still set state even if persistence fails
+      console.error('Failed to logout:', error);
       setIsOnboarded(false);
     }
   };
 
-  const value = {
+  const value: AuthContextType = {
+    isAuthenticated,
     isOnboarded,
-    isLoadingAuth,
+    isLoadingAuth: isLoadingAuth || !isHydrated,
     completeOnboarding,
     logout,
-    authEnabled: AUTH_CONFIG.ENABLE_AUTH,
-    mockUser: AUTH_CONFIG.ENABLE_AUTH ? null : AUTH_CONFIG.MOCK_USER,
     hasBusiness,
   };
 

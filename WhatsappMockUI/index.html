@@ -880,7 +880,7 @@
 
                 try {
                     // Use the simulator endpoint to find business
-                    const response = await fetch(`http://localhost:3000/api/v1/whatsapp-simulator/businesses/search/${businessCode.replace('S', '')}`);
+                    const response = await fetch(`http://localhost:3001/api/v1/whatsapp-simulator/businesses/search/${businessCode.replace('S', '')}`);
                     const data = await response.json();
 
                     if (data.success) {
@@ -1023,7 +1023,7 @@
                     console.log('Sending webhook payload:', webhookPayload);
 
                     // Send to the dedicated simulator webhook endpoint
-                    const response = await fetch('http://localhost:3000/simulate-webhooks/whatsapp', {
+                    const response = await fetch('http://localhost:3001/simulate-webhooks/whatsapp', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -1060,7 +1060,7 @@
                 try {
                     // Use the polling endpoint with timestamp tracking
                     const sinceTimestamp = this.lastPollTime || Date.now() - 5000;
-                    const response = await fetch(`http://localhost:3000/api/v1/whatsapp-simulator/poll?customerPhone=${encodeURIComponent(this.customerPhone)}&since=${sinceTimestamp}&limit=10`);
+                    const response = await fetch(`http://localhost:3001/api/v1/whatsapp-simulator/poll?customerPhone=${encodeURIComponent(this.customerPhone)}&since=${sinceTimestamp}&limit=10`);
                     const data = await response.json();
                     this.lastPollTime = Date.now();
                     this.updateDebugPanel();
@@ -1446,7 +1446,7 @@
                     this.addDebugLog(`Sending ${interactiveType} interaction: ${replyData.id} - ${replyData.title}`);
 
                     // Send to the dedicated simulator webhook endpoint
-                    const response = await fetch('http://localhost:3000/simulate-webhooks/whatsapp', {
+                    const response = await fetch('http://localhost:3001/simulate-webhooks/whatsapp', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'

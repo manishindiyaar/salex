@@ -1,4 +1,15 @@
-import React from 'react';
+/**
+ * ProfileScreen (My Account)
+ * 
+ * High-Strength styled account screen with:
+ * - Business profile header with avatar
+ * - Quick stats card
+ * - Clean menu sections
+ * - Edit business info modal
+ * - Edit business hours modal
+ */
+
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,102 +23,128 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  RefreshControl,
+  TextInput,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-
-import { GradientView, Button, Input } from '@components/index';
-import { Colors, Spacing, Typography, BorderRadius } from '@theme/config';
-import { useOnboardingStore } from '@store/onboardingStore';
-import { useServiceStore } from '@store/serviceStore';
-import { useBusinessStore } from '@store/businessStore';
-import { useAuth } from '@context/AuthContext';
-import { useState, useEffect } from 'react';
-import { getBusinessMe } from '@services/businessService';
+import { useNavigation } from '@react-navigation/native';
+import { Colors, Spacing, Typography, BorderRadius } from '../../theme/config';
+import { useBusinessStore } from '../../store/businessStore';
+import { useServiceStore } from '../../store/serviceStore';
+import { useBookingStore } from '../../store/bookingStore';
+import { useResourceStore } from '../../store/resourceStore';
+import { useStaffStore } from '../../store/staffStore';
+import { useAuth } from '../../context/AuthContext';
+import { useHaptics } from '../../hooks/useHaptics';
+import { useCategoryConfig } from '../../hooks/useCategoryConfig';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// Business types from the database schema
-type BusinessType = 'SALON' | 'GENERAL_STORE' | 'FOOD_VENDOR';  
+import {
+  SubscriptionCard,
+  TrialBanner,
+  GraceBanner,
+  ExpiredAlert,
+  AccountSuspendedBanner,
+  SubscriptionInfo,
+} from '../../components/subscription';
 
-
-interface ProfileMenuItem {
+interface MenuItem {
   id: string;
   title: string;
-  subtitle?: string;
   icon: string;
-  color: string;
+  color?: string;
   onPress: () => void;
-  showChevron?: boolean;
+  rightText?: string;
+  danger?: boolean;
 }
 
+// Helper function to format category label for display
+const formatCategoryLabel = (category: string): string => {
+  const categoryLabels: Record<string, string> = {
+    SALON: 'Salon',
+    SPA: 'Spa',
+    CLINIC: 'Clinic',
+    BEAUTY_PARLOR: 'Beauty Parlor',
+    FITNESS: 'Fitness Center',
+    BARBERSHOP: 'Barbershop',
+    WELLNESS: 'Wellness Center',
+  };
+  return categoryLabels[category] || category.charAt(0) + category.slice(1).toLowerCase().replace(/_/g, ' ');
+};
+
 const ProfileScreen: React.FC = () => {
-  const { reset } = useOnboardingStore();
-  const { items: services = [] } = useServiceStore();
   const { business, loading, updating, updatingHours, fetchMe, update, updateHours } = useBusinessStore();
+  const { items: services } = useServiceStore();
+  const { items: bookings } = useBookingStore();
+  const { items: resources } = useResourceStore();
+  const { items: staff } = useStaffStore();
   const { logout } = useAuth();
-  
-  // Modal states
+  const haptics = useHaptics();
+  const navigation = useNavigation<any>();
+  const categoryConfig = useCategoryConfig();
+
+  const [refreshing, setRefreshing] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showHoursModal, setShowHoursModal] = useState(false);
-  
-  // Form states
+
+  // Edit form state
   const [editForm, setEditForm] = useState({
     name: '',
-    businessType: 'SALON' as BusinessType,
     phoneNumber: '',
-    address: '',
   });
-  
-  const [formErrors, setFormErrors] = useState<{
-    name?: string;
-    phoneNumber?: string;
-    address?: string;
-  }>({});
-  
-  // Business hours state - loaded from database
+
+  // Business hours state
   const [businessHours, setBusinessHours] = useState<{
     [key: string]: { open: string; close: string; closed: boolean };
   }>({});
-  
-  const [businessInfo, setBusinessInfo] = useState({
-    name: 'Loading...',
-    type: 'SALON' as BusinessType,
-    phone: '+1234567890',
-    address: 'Loading address...',
-  });
 
-  // Load business data on component mount
+  // Subscription info derived from business
+  const subscriptionInfo = useMemo((): SubscriptionInfo | null => {
+    const subscription = (business as any)?.subscription;
+    if (!subscription) return null;
+
+    const now = new Date();
+    let daysRemaining: number | undefined;
+
+    if (subscription.status === 'TRIAL' && subscription.trialEndsAt) {
+      const trialEnd = new Date(subscription.trialEndsAt);
+      daysRemaining = Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    } else if (subscription.currentPeriodEnd) {
+      const periodEnd = new Date(subscription.currentPeriodEnd);
+      daysRemaining = Math.max(0, Math.ceil((periodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    }
+
+    return {
+      plan: subscription.plan,
+      status: subscription.status,
+      trialEndsAt: subscription.trialEndsAt,
+      currentPeriodEnd: subscription.currentPeriodEnd,
+      daysRemaining,
+    };
+  }, [business]);
+
+  // Check if business is suspended
+  const isBusinessSuspended = business?.isActive === false;
+
   useEffect(() => {
     fetchMe();
   }, [fetchMe]);
-  
-  // Update local state when business data changes
+
   useEffect(() => {
     if (business) {
-      setBusinessInfo({
-        name: business.name || 'Your Business',
-        type: business.businessType || 'SALON',
-        phone: business.phoneNumber || '+1234567890',
-        address: business.address || 'Business address not set',
-      });
-      
-      // Update form with business data
       setEditForm({
         name: business.name || '',
-        businessType: business.businessType || 'SALON',
         phoneNumber: business.phoneNumber || '',
-        address: business.address || '',
       });
-      
-      // Load business hours from database
+
       if (business.hoursOfOperation) {
-        setBusinessHours(business.hoursOfOperation);
+        setBusinessHours(business.hoursOfOperation as any);
       } else {
-        // Set default hours if none exist
         setBusinessHours({
-          monday: { open: '09:00', close: '17:00', closed: false },
-          tuesday: { open: '09:00', close: '17:00', closed: false },
-          wednesday: { open: '09:00', close: '17:00', closed: false },
-          thursday: { open: '09:00', close: '17:00', closed: false },
-          friday: { open: '09:00', close: '17:00', closed: false },
+          monday: { open: '09:00', close: '18:00', closed: false },
+          tuesday: { open: '09:00', close: '18:00', closed: false },
+          wednesday: { open: '09:00', close: '18:00', closed: false },
+          thursday: { open: '09:00', close: '18:00', closed: false },
+          friday: { open: '09:00', close: '18:00', closed: false },
           saturday: { open: '10:00', close: '16:00', closed: false },
           sunday: { open: '10:00', close: '16:00', closed: true },
         });
@@ -115,751 +152,518 @@ const ProfileScreen: React.FC = () => {
     }
   }, [business]);
 
-  // FORM VALIDATION
-  const validateForm = () => {
-    const errors: typeof formErrors = {};
-    
-    if (!editForm.name.trim()) {
-      errors.name = 'Business name is required';
-    } else if (editForm.name.length < 2 || editForm.name.length > 100) {
-      errors.name = 'Business name must be between 2 and 100 characters';
-    }
-    
-    if (!editForm.phoneNumber.trim()) {
-      errors.phoneNumber = 'Phone number is required';
-    } else if (!/^\+[1-9]\d{1,14}$/.test(editForm.phoneNumber)) {
-      errors.phoneNumber = 'Phone number must be in E.164 format (e.g., +1234567890)';
-    }
-    
-    if (!editForm.address.trim()) {
-      errors.address = 'Business address is required';
-    } else if (editForm.address.length < 10 || editForm.address.length > 200) {
-      errors.address = 'Address must be between 10 and 200 characters';
-    }
-    
-    return { errors, isValid: Object.keys(errors).length === 0 };
-  };
-  
-  // MODAL HANDLERS
-  const handleEditBusinessInfo = () => {
-    if (business) {
-      setEditForm({
-        name: business.name || '',
-        businessType: business.businessType || 'SALON',
-        phoneNumber: business.phoneNumber || '',
-        address: business.address || '',
-      });
-      setFormErrors({});
-      setShowEditModal(true);
-    }
-  };
-  
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchMe();
+    setRefreshing(false);
+  }, [fetchMe]);
+
+  // Calculate stats
+  const completedBookings = bookings?.filter((b: any) => b.status === 'COMPLETED').length || 0;
+  const totalRevenue = bookings
+    ?.filter((b: any) => b.status === 'COMPLETED')
+    .reduce((sum: number, b: any) => sum + (Number(b.totalPrice) || 0), 0) || 0;
+
   const handleSaveBusinessInfo = async () => {
-    const validation = validateForm();
-    setFormErrors(validation.errors);
+    if (!business || !editForm.name.trim()) return;
     
-    if (!validation.isValid || !business) return;
-    
+    haptics.medium();
     try {
       await update(business.id, {
         name: editForm.name.trim(),
-        businessType: editForm.businessType as any, // Cast to work around shared-types limitation
         phoneNumber: editForm.phoneNumber.trim(),
-        address: editForm.address.trim(),
       });
+      haptics.heavy();
       setShowEditModal(false);
     } catch (error) {
-      console.error('❌ Failed to update business:', error);
+      console.error('Failed to update business:', error);
+      Alert.alert('Error', 'Failed to update business info');
     }
   };
-  
-  const resetEditModal = () => {
-    setShowEditModal(false);
-    setFormErrors({});
-  };
-  
-  // BUSINESS HOURS HANDLERS
-  const handleEditBusinessHours = () => {
-    setShowHoursModal(true);
-  };
-  
+
   const handleSaveBusinessHours = async () => {
     if (!business) return;
     
+    haptics.medium();
     try {
       await updateHours(business.id, businessHours);
+      haptics.heavy();
       setShowHoursModal(false);
     } catch (error) {
-      console.error('❌ Failed to update business hours:', error);
+      console.error('Failed to update hours:', error);
+      Alert.alert('Error', 'Failed to update business hours');
     }
   };
-  
-  const resetHoursModal = () => {
-    setShowHoursModal(false);
-  };
-  
-  const updateDayHours = (day: string, field: 'open' | 'close', value: string) => {
-    setBusinessHours(prev => ({
-      ...prev,
-      [day]: {
-        ...prev[day],
-        [field]: value,
-      }
-    }));
-  };
-  
+
   const toggleDayClosed = (day: string) => {
+    haptics.light();
     setBusinessHours(prev => ({
       ...prev,
-      [day]: {
-        ...prev[day],
-        closed: !prev[day]?.closed,
-      }
+      [day]: { ...prev[day], closed: !prev[day]?.closed },
     }));
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Clear all app data
-              await AsyncStorage.multiRemove(['@salex_onboarded', 'business_id']);
-              reset();
-              logout();
-              console.log('✅ Logout completed - all data cleared');
-            } catch (error) {
-              console.error('❌ Logout error:', error);
-              // Still proceed with logout
-              reset();
-              logout();
-            }
+    haptics.medium();
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await AsyncStorage.multiRemove(['@salex_onboarded', 'business_id']);
+            logout();
+          } catch (error) {
+            logout();
           }
-        }
-      ]
-    );
+        },
+      },
+    ]);
   };
 
-  const handleResetOnboarding = () => {
-    Alert.alert(
-      'Reset Onboarding',
-      'This will reset your app to the onboarding flow. This is useful for testing. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Clear all app data
-              await AsyncStorage.multiRemove(['@salex_onboarded', 'business_id']);
-              reset();
-              logout();
-              console.log('✅ Onboarding reset completed - all data cleared');
-            } catch (error) {
-              console.error('❌ Reset error:', error);
-              // Still proceed with reset
-              reset();
-              logout();
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const menuSections: { title: string; items: ProfileMenuItem[] }[] = [
+  const businessMenuItems: MenuItem[] = [
     {
-      title: 'Business',
-      items: [
-        {
-          id: 'business-info',
-          title: 'Business Information',
-          subtitle: 'Name, address, contact details',
-          icon: 'briefcase',
-          color: Colors.PRIMARY,
-          onPress: handleEditBusinessInfo,
-          showChevron: true,
-        },
-        {
-          id: 'business-hours',
-          title: 'Business Hours',
-          subtitle: 'Operating hours and availability',
-          icon: 'clock',
-          color: Colors.SUCCESS,
-          onPress: handleEditBusinessHours,
-          showChevron: true,
-        },
-        {
-          id: 'services',
-          title: 'Manage Services',
-          subtitle: 'Add, edit, or remove services',
-          icon: 'scissors',
-          color: Colors.WARNING,
-          onPress: () => console.log('Manage services'),
-          showChevron: true,
-        },
-        {
-          id: 'qr-code',
-          title: 'QR Code',
-          subtitle: 'Share your booking link',
-          icon: 'square',
-          color: Colors.PRIMARY,
-          onPress: () => console.log('QR code'),
-          showChevron: true,
-        },
-      ],
+      id: 'edit-info',
+      title: 'Business Information',
+      icon: 'edit-3',
+      onPress: () => {
+        haptics.light();
+        setShowEditModal(true);
+      },
     },
     {
-      title: 'Analytics',
-      items: [
-        {
-          id: 'reports',
-          title: 'Business Reports',
-          subtitle: 'Revenue, bookings, and insights',
-          icon: 'bar-chart-2',
-          color: Colors.SUCCESS,
-          onPress: () => console.log('Reports'),
-          showChevron: true,
-        },
-        {
-          id: 'customer-insights',
-          title: 'Customer Insights',
-          subtitle: 'Customer behavior and preferences',
-          icon: 'users',
-          color: Colors.PRIMARY,
-          onPress: () => console.log('Customer insights'),
-          showChevron: true,
-        },
-      ],
+      id: 'hours',
+      title: 'Business Hours',
+      icon: 'clock',
+      onPress: () => {
+        haptics.light();
+        setShowHoursModal(true);
+      },
     },
     {
-      title: 'Settings',
-      items: [
-        {
-          id: 'notifications',
-          title: 'Notifications',
-          subtitle: 'Manage notification preferences',
-          icon: 'bell',
-          color: Colors.WARNING,
-          onPress: () => console.log('Notifications'),
-          showChevron: true,
-        },
-        {
-          id: 'privacy',
-          title: 'Privacy & Security',
-          subtitle: 'Data and security settings',
-          icon: 'shield',
-          color: Colors.SUCCESS,
-          onPress: () => console.log('Privacy'),
-          showChevron: true,
-        },
-        {
-          id: 'backup',
-          title: 'Backup & Sync',
-          subtitle: 'Data backup and synchronization',
-          icon: 'cloud',
-          color: Colors.PRIMARY,
-          onPress: () => console.log('Backup'),
-          showChevron: true,
-        },
-      ],
+      id: 'resources',
+      title: `${categoryConfig.terminology.resourcePlural}`,
+      icon: 'grid',
+      rightText: `${resources.filter(r => r.isActive).length} active`,
+      onPress: () => {
+        haptics.light();
+        navigation.navigate('ResourceManagement');
+      },
     },
     {
-      title: 'Support',
-      items: [
-        {
-          id: 'help',
-          title: 'Help & Support',
-          subtitle: 'FAQs and customer support',
-          icon: 'help-circle',
-          color: Colors.PRIMARY,
-          onPress: () => console.log('Help'),
-          showChevron: true,
-        },
-        {
-          id: 'feedback',
-          title: 'Send Feedback',
-          subtitle: 'Help us improve the app',
-          icon: 'message-square',
-          color: Colors.SUCCESS,
-          onPress: () => console.log('Feedback'),
-          showChevron: true,
-        },
-        {
-          id: 'about',
-          title: 'About Salex',
-          subtitle: 'App version and information',
-          icon: 'info',
-          color: Colors.TEXT_SECONDARY,
-          onPress: () => console.log('About'),
-          showChevron: true,
-        },
-      ],
+      id: 'staff',
+      title: categoryConfig.terminology.staffPlural,
+      icon: 'users',
+      rightText: `${staff.filter(s => s.isActive).length} active`,
+      onPress: () => {
+        haptics.light();
+        navigation.navigate('StaffManagement');
+      },
     },
     {
-      title: 'Account',
-      items: [
-        {
-          id: 'reset-onboarding',
-          title: 'Reset Onboarding',
-          subtitle: 'Go back to onboarding (for testing)',
-          icon: 'refresh-cw',
-          color: Colors.WARNING,
-          onPress: handleResetOnboarding,
-          showChevron: false,
-        },
-        {
-          id: 'logout',
-          title: 'Logout',
-          subtitle: 'Sign out of your account',
-          icon: 'log-out',
-          color: Colors.ERROR,
-          onPress: handleLogout,
-          showChevron: false,
-        },
-      ],
+      id: 'qr-code',
+      title: 'QR Code',
+      icon: 'maximize',
+      rightText: business?.routingCode || '----',
+      onPress: () => {
+        haptics.light();
+        Alert.alert('QR Code', `Your routing code is: ${business?.routingCode || 'Not set'}`);
+      },
     },
   ];
 
-  const getBusinessTypeDisplay = (type: string) => {
-    const types: Record<string, string> = {
-      'SALON': 'Hair Salon',
-      'GENERAL_STORE': 'General Store',
-      'FOOD_VENDOR': 'Food Vendor',
-    };
-    return types[type] || type;
-  };
+  const settingsMenuItems: MenuItem[] = [
+    {
+      id: 'notifications',
+      title: 'Notifications',
+      icon: 'bell',
+      onPress: () => Alert.alert('Coming Soon', 'Notification settings coming soon'),
+    },
+    {
+      id: 'language',
+      title: 'Language',
+      icon: 'globe',
+      rightText: 'English',
+      onPress: () => Alert.alert('Coming Soon', 'Language settings coming soon'),
+    },
+    {
+      id: 'help',
+      title: 'Help & Support',
+      icon: 'help-circle',
+      onPress: () => Alert.alert('Support', 'Contact us at support@salex.app'),
+    },
+  ];
 
-  const renderMenuItem = (item: ProfileMenuItem) => (
+  const accountMenuItems: MenuItem[] = [
+    {
+      id: 'logout',
+      title: 'Sign Out',
+      icon: 'log-out',
+      danger: true,
+      onPress: handleLogout,
+    },
+  ];
+
+  const renderMenuItem = (item: MenuItem, isLast: boolean) => (
     <TouchableOpacity
       key={item.id}
-      style={styles.menuItem}
+      style={[styles.menuItem, !isLast && styles.menuItemBorder]}
       onPress={item.onPress}
+      activeOpacity={0.7}
     >
-      <View style={[styles.menuIcon, { backgroundColor: item.color + '20' }]}>
-        <Icon name={item.icon} size={20} color={item.color} />
+      <View style={[styles.menuIcon, item.danger && styles.menuIconDanger]}>
+        <Icon 
+          name={item.icon} 
+          size={20} 
+          color={item.danger ? Colors.ERROR : Colors.TEXT} 
+        />
       </View>
-      
-      <View style={styles.menuContent}>
-        <Text style={styles.menuTitle}>{item.title}</Text>
-        {item.subtitle && (
-          <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
-        )}
-      </View>
-      
-      {item.showChevron && (
-        <Icon name="chevron-right" size={20} color={Colors.TEXT_SECONDARY} />
+      <Text style={[styles.menuTitle, item.danger && styles.menuTitleDanger]}>
+        {item.title}
+      </Text>
+      {item.rightText ? (
+        <Text style={styles.menuRightText}>{item.rightText}</Text>
+      ) : (
+        <Icon name="chevron-right" size={20} color={Colors.TEXT_TERTIARY} />
       )}
     </TouchableOpacity>
+  );
+
+  const renderMenuSection = (title: string, items: MenuItem[]) => (
+    <View style={styles.menuSection}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.menuCard}>
+        {items.map((item, index) => renderMenuItem(item, index === items.length - 1))}
+      </View>
+    </View>
   );
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.BACKGROUND} />
-      <GradientView variant="dark" style={styles.gradient}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Profile</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.editButton} onPress={handleEditBusinessInfo}>
-              <Icon name="edit-2" size={20} color={Colors.PRIMARY} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.signOutButton} onPress={handleLogout}>
-              <Icon name="log-out" size={20} color={Colors.ERROR} />
-            </TouchableOpacity>
+
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>My Account</Text>
+        <TouchableOpacity 
+          style={styles.settingsButton}
+          onPress={() => {
+            haptics.light();
+            setShowEditModal(true);
+          }}
+        >
+          <Icon name="settings" size={22} color={Colors.TEXT} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={Colors.SALEX_GREEN}
+          />
+        }
+      >
+        {/* Account Suspended Banner */}
+        {isBusinessSuspended && (
+          <AccountSuspendedBanner />
+        )}
+
+        {/* Subscription Status Banners */}
+        {subscriptionInfo?.status === 'TRIAL' && subscriptionInfo.daysRemaining !== undefined && (
+          <View style={styles.bannerContainer}>
+            <TrialBanner
+              daysRemaining={subscriptionInfo.daysRemaining}
+              onUpgrade={() => Alert.alert('Upgrade', 'Contact support to upgrade your plan')}
+            />
+          </View>
+        )}
+
+        {subscriptionInfo?.status === 'GRACE' && subscriptionInfo.daysRemaining !== undefined && (
+          <View style={styles.bannerContainer}>
+            <GraceBanner daysRemaining={subscriptionInfo.daysRemaining} />
+          </View>
+        )}
+
+        {subscriptionInfo?.status === 'EXPIRED' && (
+          <View style={styles.bannerContainer}>
+            <ExpiredAlert />
+          </View>
+        )}
+
+        {/* Profile Card */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatar}>
+              <Icon name="briefcase" size={32} color={Colors.SALEX_GREEN} />
+            </View>
+          </View>
+          <Text style={styles.businessName}>
+            {loading ? 'Loading...' : business?.name || 'Your Business'}
+          </Text>
+          <Text style={styles.businessType}>
+            {business?.category ? formatCategoryLabel(business.category) : 'Business'}
+          </Text>
+          {business?.phoneNumber && (
+            <View style={styles.phoneRow}>
+              <Icon name="phone" size={14} color={Colors.TEXT_TERTIARY} />
+              <Text style={styles.phoneText}>{business.phoneNumber}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Stats Card */}
+        <View style={styles.statsCard}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{services.length}</Text>
+            <Text style={styles.statLabel}>Services</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{completedBookings}</Text>
+            <Text style={styles.statLabel}>{categoryConfig.terminology.bookingPlural}</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={[styles.statValue, { color: Colors.SALEX_GREEN }]}>
+              ₹{totalRevenue.toLocaleString('en-IN')}
+            </Text>
+            <Text style={styles.statLabel}>Revenue</Text>
           </View>
         </View>
 
-        <ScrollView
-          style={styles.scrollContainer}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
-          {/* Business Info Card */}
-          <View style={styles.businessCard}>
-            <View style={styles.businessHeader}>
-              <View style={styles.businessIcon}>
-                <Icon name="briefcase" size={32} color={Colors.PRIMARY} />
-              </View>
-              <View style={styles.businessInfo}>
-                <Text style={styles.businessName}>{businessInfo.name}</Text>
-                <Text style={styles.businessType}>
-                  {getBusinessTypeDisplay(businessInfo.type)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.businessDetails}>
-              <View style={styles.businessDetail}>
-                <Icon name="phone" size={16} color={Colors.TEXT_SECONDARY} />
-                <Text style={styles.businessDetailText}>{businessInfo.phone}</Text>
-              </View>
-              
-              
-              <View style={styles.businessDetail}>
-                <Icon name="map-pin" size={16} color={Colors.TEXT_SECONDARY} />
-                <Text style={styles.businessDetailText} numberOfLines={3}>
-                  {businessInfo.address}
-                </Text>
-              </View>
-              
-              {loading && (
-                <View style={styles.businessDetail}>
-                  <ActivityIndicator size="small" color={Colors.TEXT_SECONDARY} style={{width: 16, height: 16}} />
-                  <Text style={styles.businessDetailText}>Loading business data...</Text>
-                </View>
-              )}
-            </View>
+        {/* Subscription Card */}
+        {subscriptionInfo && (
+          <View style={styles.subscriptionSection}>
+            <SubscriptionCard
+              subscription={subscriptionInfo}
+              onUpgrade={() => Alert.alert('Upgrade', 'Contact support to upgrade your plan')}
+            />
           </View>
-
-          {/* Quick Stats */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{services.length * 12}</Text>
-              <Text style={styles.statLabel}>Customers</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{services.length}</Text>
-              <Text style={styles.statLabel}>Services</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>4.9</Text>
-              <Text style={styles.statLabel}>Rating</Text>
-            </View>
-          </View>
-
-          {/* Menu Sections */}
-          {/* Edit Business Modal */}
-        <Modal
-          visible={showEditModal}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={resetEditModal}
-        >
-          <SafeAreaView style={styles.modalContainer}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.modalContent}
-            >
-              <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={resetEditModal} style={styles.cancelButton}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Edit Business</Text>
-                <TouchableOpacity 
-                  onPress={handleSaveBusinessInfo} 
-                  style={[styles.saveButton, (!editForm.name.trim() || !editForm.phoneNumber.trim() || !editForm.address.trim()) && styles.saveButtonDisabled]}
-                  disabled={updating || !editForm.name.trim() || !editForm.phoneNumber.trim() || !editForm.address.trim()}
-                >
-                  {updating ? (
-                    <ActivityIndicator size="small" color={Colors.PRIMARY} />
-                  ) : (
-                    <Text style={styles.saveButtonText}>Save</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
-                <Input
-                  value={editForm.name}
-                  onChangeText={(text) => {
-                    setEditForm({ ...editForm, name: text });
-                    if (formErrors.name) setFormErrors({ ...formErrors, name: undefined });
-                  }}
-                  placeholder="Business name"
-                  error={formErrors.name}
-                  leftIcon="briefcase"
-                  containerStyle={styles.inputContainer}
-                />
-
-                <View style={styles.pickerContainer}>
-                  <Text style={styles.pickerLabel}>Business Type</Text>
-                  <View style={styles.pickerButtonsContainer}>
-                    {(['SALON', 'GENERAL_STORE', 'FOOD_VENDOR'] as BusinessType[]).map((type) => (
-                      <TouchableOpacity
-                        key={type}
-                        style={[
-                          styles.pickerButton,
-                          editForm.businessType === type && styles.pickerButtonSelected,
-                        ]}
-                        onPress={() => setEditForm({ ...editForm, businessType: type })}
-                      >
-                        <Text style={[
-                          styles.pickerButtonText,
-                          editForm.businessType === type && styles.pickerButtonTextSelected,
-                        ]}>
-                          {getBusinessTypeDisplay(type)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                <Input
-                  value={editForm.phoneNumber}
-                  onChangeText={(text) => {
-                    setEditForm({ ...editForm, phoneNumber: text });
-                    if (formErrors.phoneNumber) setFormErrors({ ...formErrors, phoneNumber: undefined });
-                  }}
-                  placeholder="Phone number (e.g., +1234567890)"
-                  error={formErrors.phoneNumber}
-                  leftIcon="phone"
-                  keyboardType="phone-pad"
-                  containerStyle={styles.inputContainer}
-                />
-
-                <Input
-                  value={editForm.address}
-                  onChangeText={(text) => {
-                    setEditForm({ ...editForm, address: text });
-                    if (formErrors.address) setFormErrors({ ...formErrors, address: undefined });
-                  }}
-                  placeholder="Business address"
-                  error={formErrors.address}
-                  leftIcon="map-pin"
-                  multiline
-                  numberOfLines={3}
-                  containerStyle={styles.inputContainer}
-                />
-              </ScrollView>
-            </KeyboardAvoidingView>
-          </SafeAreaView>
-        </Modal>
-
-        {/* Business Hours Modal */}
-        <Modal
-          visible={showHoursModal}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={resetHoursModal}
-        >
-          <SafeAreaView style={styles.modalContainer}>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={styles.modalContent}
-            >
-              <View style={styles.modalHeader}>
-                <TouchableOpacity onPress={resetHoursModal} style={styles.cancelButton}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <Text style={styles.modalTitle}>Business Hours</Text>
-                <TouchableOpacity 
-                  onPress={handleSaveBusinessHours} 
-                  style={styles.saveButton}
-                  disabled={updatingHours}
-                >
-                  {updatingHours ? (
-                    <ActivityIndicator size="small" color={Colors.PRIMARY} />
-                  ) : (
-                    <Text style={styles.saveButtonText}>Save</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.modalForm} showsVerticalScrollIndicator={false}>
-                {Object.entries(businessHours).map(([day, hours]) => (
-                  <View key={day} style={styles.dayHoursContainer}>
-                    <View style={styles.dayHeader}>
-                      <Text style={styles.dayName}>
-                        {day.charAt(0).toUpperCase() + day.slice(1)}
-                      </Text>
-                      <TouchableOpacity
-                        style={[
-                          styles.closedToggle,
-                          hours?.closed && styles.closedToggleActive,
-                        ]}
-                        onPress={() => toggleDayClosed(day)}
-                      >
-                        <Text style={[
-                          styles.closedToggleText,
-                          hours?.closed && styles.closedToggleTextActive,
-                        ]}>
-                          {hours?.closed ? 'Closed' : 'Open'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    
-                    {!hours?.closed && (
-                      <View style={styles.timeInputsContainer}>
-                        <View style={styles.timeInput}>
-                          <Text style={styles.timeLabel}>Open</Text>
-                          <TouchableOpacity style={styles.timeButton}>
-                            <Text style={styles.timeButtonText}>
-                              {hours?.open || '09:00'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                        
-                        <Icon name="minus" size={16} color={Colors.TEXT_SECONDARY} />
-                        
-                        <View style={styles.timeInput}>
-                          <Text style={styles.timeLabel}>Close</Text>
-                          <TouchableOpacity style={styles.timeButton}>
-                            <Text style={styles.timeButtonText}>
-                              {hours?.close || '17:00'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                ))}
-                
-                <View style={styles.hoursNote}>
-                  <Icon name="info" size={16} color={Colors.TEXT_TERTIARY} />
-                  <Text style={styles.hoursNoteText}>
-                    These hours will be displayed to customers when booking services
-                  </Text>
-                </View>
-              </ScrollView>
-            </KeyboardAvoidingView>
-          </SafeAreaView>
-        </Modal>
+        )}
 
         {/* Menu Sections */}
-        {menuSections.map((section) => (
-            <View key={section.title} style={styles.menuSection}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <View style={styles.menuItems}>
-                {section.items.map((item, itemIndex) => (
-                  <View key={item.id}>
-                    {renderMenuItem(item)}
-                    {itemIndex < section.items.length - 1 && (
-                      <View style={styles.menuSeparator} />
-                    )}
-                  </View>
-                ))}
-              </View>
-            </View>
-          ))}
+        {renderMenuSection('Business', businessMenuItems)}
+        {renderMenuSection('Settings', settingsMenuItems)}
+        {renderMenuSection('Account', accountMenuItems)}
 
-          {/* App Version */}
-          <View style={styles.versionContainer}>
-            <Text style={styles.versionText}>Salex v1.0.0</Text>
-            <Text style={styles.versionSubtext}>
-              Made with ❤️ for salon owners
-            </Text>
+        {/* Version */}
+        <View style={styles.versionContainer}>
+          <Text style={styles.versionText}>Salex v1.0.0</Text>
+        </View>
+      </ScrollView>
+
+      {/* Edit Business Modal */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalContent}
+          >
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                <Text style={styles.modalCancel}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Edit Business</Text>
+              <TouchableOpacity 
+                onPress={handleSaveBusinessInfo}
+                disabled={updating || !editForm.name.trim()}
+              >
+                {updating ? (
+                  <ActivityIndicator size="small" color={Colors.SALEX_GREEN} />
+                ) : (
+                  <Text style={[
+                    styles.modalSave,
+                    !editForm.name.trim() && styles.modalSaveDisabled
+                  ]}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalForm}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Business Name</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editForm.name}
+                  onChangeText={(text) => setEditForm({ ...editForm, name: text })}
+                  placeholder="Enter business name"
+                  placeholderTextColor={Colors.TEXT_TERTIARY}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Phone Number</Text>
+                <TextInput
+                  style={styles.textInput}
+                  value={editForm.phoneNumber}
+                  onChangeText={(text) => setEditForm({ ...editForm, phoneNumber: text })}
+                  placeholder="+91 98765 43210"
+                  placeholderTextColor={Colors.TEXT_TERTIARY}
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Business Hours Modal */}
+      <Modal
+        visible={showHoursModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowHoursModal(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowHoursModal(false)}>
+              <Text style={styles.modalCancel}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Business Hours</Text>
+            <TouchableOpacity onPress={handleSaveBusinessHours} disabled={updatingHours}>
+              {updatingHours ? (
+                <ActivityIndicator size="small" color={Colors.SALEX_GREEN} />
+              ) : (
+                <Text style={styles.modalSave}>Save</Text>
+              )}
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </GradientView>
+
+          <ScrollView style={styles.modalForm}>
+            {Object.entries(businessHours).map(([day, hours]) => (
+              <View key={day} style={styles.dayRow}>
+                <View style={styles.dayInfo}>
+                  <Text style={styles.dayName}>
+                    {day.charAt(0).toUpperCase() + day.slice(1)}
+                  </Text>
+                  {!hours?.closed && (
+                    <Text style={styles.dayHours}>
+                      {hours?.open || '09:00'} - {hours?.close || '18:00'}
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.dayToggle,
+                    hours?.closed ? styles.dayToggleClosed : styles.dayToggleOpen,
+                  ]}
+                  onPress={() => toggleDayClosed(day)}
+                >
+                  <Text style={[
+                    styles.dayToggleText,
+                    hours?.closed ? styles.dayToggleTextClosed : styles.dayToggleTextOpen,
+                  ]}>
+                    {hours?.closed ? 'Closed' : 'Open'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.BACKGROUND,
   },
-  gradient: {
-    flex: 1,
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.LG,
-    paddingTop: Spacing.XL,
-    paddingBottom: Spacing.LG,
+    paddingTop: Spacing.LG,
+    paddingBottom: Spacing.MD,
   },
   headerTitle: {
     ...Typography.H2,
     color: Colors.TEXT,
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.SM,
-  },
-  editButton: {
+  settingsButton: {
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.SM,
+    borderRadius: 20,
     backgroundColor: Colors.SURFACE,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  signOutButton: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.SM,
-    backgroundColor: Colors.ERROR + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scrollContainer: {
+  scrollView: {
     flex: 1,
   },
-  scrollContent: {
+  bannerContainer: {
     paddingHorizontal: Spacing.LG,
-    paddingBottom: Spacing.XL,
+    paddingTop: Spacing.MD,
   },
-  businessCard: {
-    backgroundColor: Colors.SURFACE,
-    borderRadius: BorderRadius.LG,
-    padding: Spacing.LG,
+  subscriptionSection: {
+    paddingHorizontal: Spacing.LG,
     marginBottom: Spacing.LG,
-    borderWidth: 1,
-    borderColor: Colors.BORDER,
   },
-  businessHeader: {
-    flexDirection: 'row',
+  profileCard: {
     alignItems: 'center',
-    marginBottom: Spacing.LG,
+    paddingVertical: Spacing.XL,
+    paddingHorizontal: Spacing.LG,
   },
-  businessIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: BorderRadius.MD,
-    backgroundColor: Colors.PRIMARY + '20',
+  avatarContainer: {
+    marginBottom: Spacing.MD,
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.SALEX_GREEN + '20',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: Spacing.MD,
-  },
-  businessInfo: {
-    flex: 1,
+    borderWidth: 3,
+    borderColor: Colors.SALEX_GREEN,
   },
   businessName: {
-    ...Typography.H3,
+    ...Typography.H2,
     color: Colors.TEXT,
     marginBottom: Spacing.XS,
   },
   businessType: {
     ...Typography.Body1,
     color: Colors.TEXT_SECONDARY,
+    marginBottom: Spacing.SM,
   },
-  businessDetails: {
-    gap: Spacing.SM,
-  },
-  businessDetail: {
+  phoneRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: Spacing.XS,
   },
-  businessDetailText: {
+  phoneText: {
     ...Typography.Body2,
-    color: Colors.TEXT_SECONDARY,
-    marginLeft: Spacing.SM,
-    flex: 1,
+    color: Colors.TEXT_TERTIARY,
   },
-  statsContainer: {
+  statsCard: {
     flexDirection: 'row',
     backgroundColor: Colors.SURFACE,
-    borderRadius: BorderRadius.LG,
-    padding: Spacing.LG,
+    marginHorizontal: Spacing.LG,
     marginBottom: Spacing.LG,
-    borderWidth: 1,
-    borderColor: Colors.BORDER,
+    borderRadius: BorderRadius.LG,
+    paddingVertical: Spacing.LG,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
+  },
+  statDivider: {
+    width: 1,
+    backgroundColor: Colors.BORDER,
   },
   statValue: {
     ...Typography.H3,
@@ -868,68 +672,67 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     ...Typography.Caption,
-    color: Colors.TEXT_SECONDARY,
+    color: Colors.TEXT_TERTIARY,
   },
   menuSection: {
     marginBottom: Spacing.LG,
+    paddingHorizontal: Spacing.LG,
   },
   sectionTitle: {
-    ...Typography.H4,
-    color: Colors.TEXT,
-    marginBottom: Spacing.MD,
+    ...Typography.Caption,
+    color: Colors.TEXT_TERTIARY,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: Spacing.SM,
+    marginLeft: Spacing.SM,
   },
-  menuItems: {
+  menuCard: {
     backgroundColor: Colors.SURFACE,
     borderRadius: BorderRadius.LG,
-    borderWidth: 1,
-    borderColor: Colors.BORDER,
     overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.LG,
+    paddingVertical: Spacing.MD,
+    paddingHorizontal: Spacing.LG,
+  },
+  menuItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.BORDER,
   },
   menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: BorderRadius.SM,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.BACKGROUND,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: Spacing.MD,
   },
-  menuContent: {
-    flex: 1,
+  menuIconDanger: {
+    backgroundColor: Colors.ERROR + '15',
   },
   menuTitle: {
     ...Typography.Body1,
     color: Colors.TEXT,
-    fontWeight: '600',
-    marginBottom: Spacing.XS,
+    flex: 1,
   },
-  menuSubtitle: {
+  menuTitleDanger: {
+    color: Colors.ERROR,
+  },
+  menuRightText: {
     ...Typography.Body2,
-    color: Colors.TEXT_SECONDARY,
-  },
-  menuSeparator: {
-    height: 1,
-    backgroundColor: Colors.BORDER,
-    marginLeft: Spacing.LG + 40 + Spacing.MD,
+    color: Colors.TEXT_TERTIARY,
   },
   versionContainer: {
     alignItems: 'center',
-    paddingVertical: Spacing.LG,
+    paddingVertical: Spacing.XL,
   },
   versionText: {
-    ...Typography.Body2,
-    color: Colors.TEXT_TERTIARY,
-    marginBottom: Spacing.XS,
-  },
-  versionSubtext: {
     ...Typography.Caption,
     color: Colors.TEXT_TERTIARY,
   },
-  
   // Modal styles
   modalContainer: {
     flex: 1,
@@ -944,160 +747,97 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.LG,
     paddingVertical: Spacing.MD,
-    backgroundColor: Colors.SURFACE,
     borderBottomWidth: 1,
     borderBottomColor: Colors.BORDER,
   },
-  cancelButton: {
-    width: 60,
-  },
-  cancelButtonText: {
+  modalCancel: {
     ...Typography.Body1,
     color: Colors.TEXT_SECONDARY,
   },
   modalTitle: {
     ...Typography.H3,
     color: Colors.TEXT,
-    textAlign: 'center',
   },
-  saveButton: {
-    width: 60,
-    alignItems: 'flex-end',
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
+  modalSave: {
     ...Typography.Body1,
-    color: Colors.PRIMARY,
+    color: Colors.SALEX_GREEN,
     fontWeight: '600',
+  },
+  modalSaveDisabled: {
+    opacity: 0.5,
   },
   modalForm: {
     flex: 1,
-    paddingHorizontal: Spacing.LG,
-    paddingTop: Spacing.LG,
+    padding: Spacing.LG,
   },
-  inputContainer: {
+  inputGroup: {
     marginBottom: Spacing.LG,
   },
-  pickerContainer: {
-    marginBottom: Spacing.LG,
-  },
-  pickerLabel: {
-    ...Typography.Body1,
-    color: Colors.TEXT,
-    fontWeight: '600',
+  inputLabel: {
+    ...Typography.Body2,
+    color: Colors.TEXT_SECONDARY,
     marginBottom: Spacing.SM,
   },
-  pickerButtonsContainer: {
-    flexDirection: 'row',
-    gap: Spacing.SM,
-    flexWrap: 'wrap',
-  },
-  pickerButton: {
-    paddingHorizontal: Spacing.MD,
-    paddingVertical: Spacing.SM,
-    borderRadius: BorderRadius.SM,
-    backgroundColor: Colors.SURFACE_VARIANT,
-    borderWidth: 1,
-    borderColor: Colors.BORDER,
-  },
-  pickerButtonSelected: {
-    backgroundColor: Colors.PRIMARY + '20',
-    borderColor: Colors.PRIMARY,
-  },
-  pickerButtonText: {
-    ...Typography.Body2,
-    color: Colors.TEXT_SECONDARY,
-  },
-  pickerButtonTextSelected: {
-    color: Colors.PRIMARY,
-    fontWeight: '600',
-  },
-  
-  // Business Hours Modal Styles
-  dayHoursContainer: {
+  textInput: {
     backgroundColor: Colors.SURFACE,
     borderRadius: BorderRadius.MD,
-    padding: Spacing.LG,
-    marginBottom: Spacing.MD,
-    borderWidth: 1,
-    borderColor: Colors.BORDER,
-  },
-  dayHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.MD,
-  },
-  dayName: {
-    ...Typography.H4,
-    color: Colors.TEXT,
-  },
-  closedToggle: {
-    paddingHorizontal: Spacing.MD,
-    paddingVertical: Spacing.SM,
-    borderRadius: BorderRadius.SM,
-    backgroundColor: Colors.SURFACE_VARIANT,
-    borderWidth: 1,
-    borderColor: Colors.BORDER,
-  },
-  closedToggleActive: {
-    backgroundColor: Colors.ERROR + '20',
-    borderColor: Colors.ERROR,
-  },
-  closedToggleText: {
-    ...Typography.Body2,
-    color: Colors.TEXT_SECONDARY,
-    fontWeight: '600',
-  },
-  closedToggleTextActive: {
-    color: Colors.ERROR,
-  },
-  timeInputsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.MD,
-  },
-  timeInput: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  timeLabel: {
-    ...Typography.Caption,
-    color: Colors.TEXT_SECONDARY,
-    marginBottom: Spacing.XS,
-  },
-  timeButton: {
-    backgroundColor: Colors.SURFACE_VARIANT,
-    borderRadius: BorderRadius.SM,
     paddingHorizontal: Spacing.LG,
     paddingVertical: Spacing.MD,
+    ...Typography.Body1,
+    color: Colors.TEXT,
     borderWidth: 1,
     borderColor: Colors.BORDER,
-    minWidth: 80,
-    alignItems: 'center',
   },
-  timeButtonText: {
+  textInputMultiline: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  // Hours modal styles
+  dayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.SURFACE,
+    paddingVertical: Spacing.MD,
+    paddingHorizontal: Spacing.LG,
+    borderRadius: BorderRadius.MD,
+    marginBottom: Spacing.SM,
+  },
+  dayInfo: {
+    flex: 1,
+  },
+  dayName: {
     ...Typography.Body1,
     color: Colors.TEXT,
     fontWeight: '600',
   },
-  hoursNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.PRIMARY + '10',
-    borderRadius: BorderRadius.SM,
-    padding: Spacing.MD,
-    marginTop: Spacing.LG,
-    gap: Spacing.SM,
+  dayHours: {
+    ...Typography.Caption,
+    color: Colors.TEXT_TERTIARY,
+    marginTop: 2,
   },
-  hoursNoteText: {
-    ...Typography.Body2,
-    color: Colors.TEXT_SECONDARY,
-    flex: 1,
-    lineHeight: 18,
+  dayToggle: {
+    paddingHorizontal: Spacing.MD,
+    paddingVertical: Spacing.SM,
+    borderRadius: BorderRadius.SM,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  dayToggleOpen: {
+    backgroundColor: Colors.SALEX_GREEN + '20',
+  },
+  dayToggleClosed: {
+    backgroundColor: Colors.ERROR + '20',
+  },
+  dayToggleText: {
+    ...Typography.Caption,
+    fontWeight: '600',
+  },
+  dayToggleTextOpen: {
+    color: Colors.SALEX_GREEN,
+  },
+  dayToggleTextClosed: {
+    color: Colors.ERROR,
   },
 });
 

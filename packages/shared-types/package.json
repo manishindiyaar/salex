@@ -1,17 +1,39 @@
 {
-  "name": "shared-types",
+  "name": "@salex/shared-types",
   "version": "1.0.0",
-  "description": "Shared TypeScript types for Salex platform",
+  "description": "Shared TypeScript types, Prisma client, and Zod schemas for Salex platform",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./prisma": {
+      "types": "./dist/db.d.ts",
+      "default": "./dist/db.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
-    "lint": "echo 'Linting skipped for shared-types in development'"
+    "lint": "echo 'Linting skipped for shared-types in development'",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
+    "prisma": "^5.22.0",
     "typescript": "^5.5.4",
+    "@types/node": "^22.7.4",
     "eslint": "^8.42.0",
     "eslint-config-custom": "workspace:*",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
@@ -21,6 +43,7 @@
     "prettier": "^3.0.0"
   },
   "files": [
-    "dist"
+    "dist",
+    "prisma"
   ]
 }

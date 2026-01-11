@@ -270,14 +270,14 @@ export default function ServicesScreen() {
             </View>
             <View style={styles.meta}>
               <View style={styles.metaItem}>
-                <Icon name="dollar-sign" size={14} color={Colors.SUCCESS} />
+                <Text style={[styles.metaText, { color: Colors.SUCCESS }]}>₹</Text>
                 <Text style={styles.metaText}>
-                  ${((item as any).price || 0).toFixed(2)}
+                  {Number((item as any).price || 0).toFixed(0)}
                 </Text>
               </View>
               <View style={styles.metaItem}>
                 <Icon name="clock" size={14} color={Colors.TEXT_SECONDARY} />
-                <Text style={styles.metaText}>{Math.round(item.durationMinutes)} min</Text>
+                <Text style={styles.metaText}>{Math.round(item.duration)} min</Text>
               </View>
             </View>
           </View>
@@ -334,7 +334,7 @@ export default function ServicesScreen() {
                     setNewService({ ...newService, price: text });
                     if (errors.price) setErrors({ ...errors, price: undefined });
                   }}
-                  placeholder="Price ($)"
+                  placeholder="Price (₹)"
                   error={errors.price}
                   leftIcon="dollar-sign"
                   keyboardType="numeric"
@@ -419,7 +419,7 @@ export default function ServicesScreen() {
                     setEditService({ ...editService, price: text });
                     if (editErrors.price) setEditErrors({ ...editErrors, price: undefined });
                   }}
-                  placeholder="Price ($)"
+                  placeholder="Price (₹)"
                   error={editErrors.price}
                   leftIcon="dollar-sign"
                   keyboardType="numeric"

@@ -1,33 +1,39 @@
 import { MD3DarkTheme } from 'react-native-paper';
+import { Colors, CalculatorTypography } from './config';
 
+/**
+ * High-Strength Salex Theme
+ * 
+ * Deep Black backgrounds, Salex Green accents, Calculator-style fonts
+ */
 export const salexTheme = {
   ...MD3DarkTheme,
   colors: {
     ...MD3DarkTheme.colors,
-    // Primary gradient colors
-    primary: '#FF416C',
-    secondary: '#FF4B2B',
-    // Backgrounds
-    background: '#121212',
-    surface: '#1E1E1E',
-    surfaceVariant: '#2A2A2A',
-    // Text colors
-    onSurface: '#FFFFFF',
-    onSurfaceVariant: '#B3B3B3',
+    // Primary - Salex Green for money/success
+    primary: Colors.PRIMARY,
+    secondary: Colors.SECONDARY,
+    // Backgrounds - Deep Black
+    background: Colors.BACKGROUND,
+    surface: Colors.SURFACE,
+    surfaceVariant: Colors.SURFACE_VARIANT,
+    // Text colors - High-Vis White
+    onSurface: Colors.TEXT,
+    onSurfaceVariant: Colors.TEXT_SECONDARY,
     // Feedback colors
-    error: '#E74C3C',
-    success: '#2ECC71',
-    // Accent colors for highlights
-    accent1: '#FF416C',
-    accent2: '#FF4B2B',
-    accent3: '#FF6B8A',
+    error: Colors.ERROR,
+    success: Colors.SUCCESS,
+    // Accent colors
+    accent1: Colors.PRIMARY,
+    accent2: Colors.SECONDARY,
+    accent3: Colors.WARNING,
   },
   fonts: {
     ...MD3DarkTheme.fonts,
-    headlineSmall: { fontFamily: 'PlayfairDisplay-Bold', fontSize: 28 },
-    bodyLarge: { fontFamily: 'Inter-Regular', fontSize: 16 },
-    bodyMedium: { fontFamily: 'Inter-Regular', fontSize: 14 },
-    labelLarge: { fontFamily: 'Inter-Bold', fontSize: 16, letterSpacing: 0.5 },
+    headlineSmall: { fontFamily: 'System', fontSize: 28, fontWeight: '700' },
+    bodyLarge: { fontFamily: 'System', fontSize: 16, fontWeight: '400' },
+    bodyMedium: { fontFamily: 'System', fontSize: 14, fontWeight: '400' },
+    labelLarge: { fontFamily: 'System', fontSize: 16, fontWeight: '700', letterSpacing: 0.5 },
   },
   roundness: 2,
   spacing: {
@@ -39,11 +45,19 @@ export const salexTheme = {
   },
 };
 
+/**
+ * High-Strength Gradients
+ * Using Salex Green for primary actions
+ */
 export const gradients = {
-  primary: ['#FF416C', '#FF4B2B'],
-  secondary: ['#FF6B8A', '#FF8E53'],
-  dark: ['#121212', '#1E1E1E'],
-  card: ['#1E1E1E', '#2A2A2A'],
+  primary: [Colors.PRIMARY, Colors.PRIMARY_DARK],
+  secondary: [Colors.SECONDARY, '#0088CC'],
+  dark: [Colors.BACKGROUND, Colors.SURFACE],
+  card: [Colors.SURFACE, Colors.SURFACE_VARIANT],
+  success: [Colors.SUCCESS, Colors.PRIMARY_DARK],
 };
+
+// Re-export theme config for convenience
+export { Colors, CalculatorTypography } from './config';
 
 export type SalexTheme = typeof salexTheme;

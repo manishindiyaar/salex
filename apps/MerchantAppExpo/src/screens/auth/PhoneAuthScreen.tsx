@@ -1,4 +1,15 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Phone Auth Screen
+ * 
+ * Real OTP authentication flow:
+ * 1. User enters phone number
+ * 2. Backend sends OTP (in dev mode, use "123456")
+ * 3. User enters OTP
+ * 4. Backend verifies and returns JWT token
+ * 5. Navigate to business onboarding
+ */
+
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +24,7 @@ import {
 } from 'react-native';
 import { Colors, Spacing, BorderRadius } from '../../theme/config';
 import Icon from 'react-native-vector-icons/Feather';
-import { useAuth } from '../../context/AuthContext';
+import { authService } from '../../services/authService';
 import { AUTH_CONFIG } from '../../config';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -34,92 +45,76 @@ type OnboardingStackParamList = {
 type PhoneAuthScreenProps = NativeStackScreenProps<OnboardingStackParamList, 'PhoneAuth'>;
 
 const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
-  const { completeOnboarding } = useAuth();
-  
-  // Simple mock state for UI (no Firebase)
-  const [confirm, setConfirm] = useState<boolean>(false);
-  const [code, setCode] = useState('');
+  const [showOtpScreen, setShowOtpScreen] = useState(false);
   const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Preset phone number when auth is disabled (but still show the flow)
-  useEffect(() => {
-    if (!AUTH_CONFIG.ENABLE_AUTH) {
-      console.log('🔧 Auth disabled - presetting phone number for test');
-      setPhone('+1234567890');
-    }
-  }, []);
-
-  // Mock phone number handler
-  async function handleSignInWithPhoneNumber(phoneNumber: string) {
-    if (!phoneNumber || !phoneNumber.startsWith('+')) {
-      Alert.alert('Error', 'Please enter phone number in E.164 format (e.g., +1234567890)');
+  // Request OTP from backend
+  async function handleRequestOtp() {
+    if (!phone || !phone.startsWith('+')) {
+      setError('Please enter phone number with country code (e.g., +919876543210)');
       return;
     }
 
-    try {
-      setLoading(true);
-      
-      if (!AUTH_CONFIG.ENABLE_AUTH) {
-        // Mock delay for auth disabled mode
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setConfirm(true);
-        console.log('🔧 Auth disabled - proceeding to OTP screen with preset code');
-      } else {
-        // Real Firebase auth would go here
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setConfirm(true);
-        Alert.alert('OTP Sent', `Verification code sent to ${phoneNumber}`);
-      }
-    } catch (error: any) {
-      console.error('Phone auth error:', error);
-      Alert.alert('Error', 'Failed to send verification code');
-    } finally {
-      setLoading(false);
+    if (phone.length < 10) {
+      setError('Please enter a valid phone number');
+      return;
     }
-  }
 
-  // Preset OTP code when auth is disabled
-  useEffect(() => {
-    if (!AUTH_CONFIG.ENABLE_AUTH && confirm) {
-      console.log('🔧 Auth disabled - presetting OTP code');
-      setCode('123456');
-    }
-  }, [confirm]);
+    setError(null);
+    setLoading(true);
 
-  // Mock code confirmation
-  async function confirmCode() {
-    if (!confirm) return;
-    
     try {
-      setLoading(true);
+      const result = await authService.requestOtp(phone);
       
-      if (!AUTH_CONFIG.ENABLE_AUTH) {
-        // Mock delay for auth disabled mode
-        await new Promise(resolve => setTimeout(resolve, 600));
-        console.log('🔧 Auth disabled - proceeding to business onboarding');
-        console.log('📍 Current navigation state:', navigation.getState?.());
-        try {
-          navigation.navigate('BusinessType', { userId: 'test-user-id' });
-        } catch (navError) {
-          console.error('❌ Navigation error:', navError);
-          // Fallback: use replace instead
-          navigation.replace('BusinessType', { userId: 'test-user-id' });
+      if (result.success) {
+        setShowOtpScreen(true);
+        // In dev mode, show hint about magic OTP
+        if (__DEV__) {
+          console.log('💡 Dev mode: Use OTP "123456"');
         }
       } else {
-        // Real Firebase OTP verification would go here
-        await new Promise(resolve => setTimeout(resolve, 800));
-        completeOnboarding();
-        Alert.alert('Success', 'Phone number verified successfully!');
+        setError(result.message);
       }
-    } catch (error: any) {
-      console.error('Code verification error:', error);
-      Alert.alert('Error', 'Invalid code. Please try again.');
+    } catch (err: any) {
+      console.error('OTP request error:', err);
+      setError('Failed to send OTP. Please check your connection.');
     } finally {
       setLoading(false);
     }
   }
 
+  // Verify OTP with backend
+  async function handleVerifyOtp() {
+    if (!otp || otp.length < 6) {
+      setError('Please enter the 6-digit OTP');
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      const result = await authService.verifyOtp(phone, otp);
+      
+      if (result.success && result.user) {
+        console.log('✅ Auth successful, navigating to onboarding');
+        // Navigate to business type selection with user ID
+        navigation.navigate('BusinessType', { userId: result.user.id });
+      } else {
+        setError(result.message);
+      }
+    } catch (err: any) {
+      console.error('OTP verification error:', err);
+      setError('Verification failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Format phone number input
   const formatPhoneNumber = (value: string) => {
     // Remove all non-numeric characters except +
     const cleaned = value.replace(/[^\d+]/g, '');
@@ -132,12 +127,8 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
     return cleaned;
   };
 
-  // Handle Google Sign-In (Disabled)
-  async function handleGoogleSignIn() {
-    Alert.alert('Google Sign-In Disabled', 'Google Sign-In is disabled in development mode');
-  }
-
-  if (!confirm) {
+  // Phone number entry screen
+  if (!showOtpScreen) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
@@ -165,24 +156,35 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
               <Text style={styles.inputLabel}>Phone Number</Text>
               <TextInput
                 value={phone}
-                onChangeText={(text) => setPhone(formatPhoneNumber(text))}
-                placeholder="+1 (555) 123-4567"
+                onChangeText={(text) => {
+                  setPhone(formatPhoneNumber(text));
+                  setError(null);
+                }}
+                placeholder="+91 98765 43210"
+                placeholderTextColor="#666"
                 style={styles.input}
                 keyboardType="phone-pad"
                 autoCapitalize="none"
                 editable={!loading}
               />
               <Text style={styles.helperText}>
-                Enter your phone number including country code
+                Include country code (e.g., +91 for India)
               </Text>
             </View>
+
+            {error && (
+              <View style={styles.errorContainer}>
+                <Icon name="alert-circle" size={16} color="#FF4444" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
 
             <TouchableOpacity
               style={[
                 styles.button,
                 (!phone.startsWith('+') || phone.length < 10 || loading) && styles.buttonDisabled
               ]}
-              onPress={() => handleSignInWithPhoneNumber(phone)}
+              onPress={handleRequestOtp}
               disabled={!phone.startsWith('+') || phone.length < 10 || loading}
             >
               <Text style={styles.buttonText}>
@@ -190,25 +192,10 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
               </Text>
             </TouchableOpacity>
 
-            {AUTH_CONFIG.ENABLE_AUTH && (
-              <>
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>or</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.googleButton, loading && styles.buttonDisabled]}
-                  onPress={handleGoogleSignIn}
-                  disabled={loading}
-                >
-                  <Icon name="chrome" size={20} color="#4285F4" />
-                  <Text style={styles.googleButtonText}>
-                    {loading ? 'Signing in...' : 'Continue with Google'}
-                  </Text>
-                </TouchableOpacity>
-              </>
+            {__DEV__ && (
+              <Text style={styles.devHint}>
+                💡 Dev mode: Backend accepts magic OTP "123456"
+              </Text>
             )}
           </View>
         </KeyboardAvoidingView>
@@ -216,6 +203,7 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
     );
   }
 
+  // OTP verification screen
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.background} />
@@ -224,7 +212,14 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
         style={styles.content}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => setConfirm(false)} style={styles.backButton}>
+          <TouchableOpacity 
+            onPress={() => {
+              setShowOtpScreen(false);
+              setOtp('');
+              setError(null);
+            }} 
+            style={styles.backButton}
+          >
             <Icon name="arrow-left" size={24} color={Colors.text} />
           </TouchableOpacity>
         </View>
@@ -242,9 +237,13 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Verification Code</Text>
             <TextInput
-              value={code}
-              onChangeText={setCode}
+              value={otp}
+              onChangeText={(text) => {
+                setOtp(text.replace(/[^0-9]/g, '').slice(0, 6));
+                setError(null);
+              }}
               placeholder="123456"
+              placeholderTextColor="#666"
               style={[styles.input, styles.otpInput]}
               keyboardType="number-pad"
               autoCapitalize="none"
@@ -257,13 +256,20 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
             </Text>
           </View>
 
+          {error && (
+            <View style={styles.errorContainer}>
+              <Icon name="alert-circle" size={16} color="#FF4444" />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
           <TouchableOpacity
             style={[
               styles.button,
-              (code.length < 4 || loading) && styles.buttonDisabled
+              (otp.length < 6 || loading) && styles.buttonDisabled
             ]}
-            onPress={confirmCode}
-            disabled={code.length < 4 || loading}
+            onPress={handleVerifyOtp}
+            disabled={otp.length < 6 || loading}
           >
             <Text style={styles.buttonText}>
               {loading ? 'Verifying...' : 'Verify Code'}
@@ -272,10 +278,21 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
 
           <TouchableOpacity
             style={styles.linkButton}
-            onPress={() => setConfirm(false)}
+            onPress={() => {
+              setOtp('');
+              setError(null);
+              handleRequestOtp();
+            }}
+            disabled={loading}
           >
-            <Text style={styles.linkButtonText}>Didn't receive code? Try again</Text>
+            <Text style={styles.linkButtonText}>Didn't receive code? Resend</Text>
           </TouchableOpacity>
+
+          {__DEV__ && (
+            <Text style={styles.devHint}>
+              💡 Dev mode: Use OTP "{AUTH_CONFIG.DEV_MAGIC_OTP}"
+            </Text>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -336,7 +353,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.XXL,
   },
   inputContainer: {
-    marginBottom: Spacing.XL,
+    marginBottom: Spacing.LG,
   },
   inputLabel: {
     fontSize: 16,
@@ -350,20 +367,33 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.LG,
     paddingHorizontal: Spacing.LG,
     paddingVertical: Spacing.MD,
-    fontSize: 16,
+    fontSize: 18,
     color: Colors.text,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   otpInput: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '600',
-    letterSpacing: 4,
+    letterSpacing: 8,
     textAlign: 'center',
   },
   helperText: {
     fontSize: 14,
     color: '#777777',
     marginTop: Spacing.SM,
+    textAlign: 'center',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.LG,
+    paddingHorizontal: Spacing.MD,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#FF4444',
+    marginLeft: Spacing.SM,
     textAlign: 'center',
   },
   button: {
@@ -391,37 +421,12 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     textAlign: 'center',
   },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: Spacing.XL,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  dividerText: {
-    fontSize: 14,
-    color: '#A6A6A6',
-    marginHorizontal: Spacing.MD,
-  },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: BorderRadius.LG,
-    paddingVertical: Spacing.LG,
-    paddingHorizontal: Spacing.XL,
-  },
-  googleButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-    marginLeft: Spacing.SM,
+  devHint: {
+    fontSize: 12,
+    color: '#888',
+    textAlign: 'center',
+    marginTop: Spacing.XL,
+    fontStyle: 'italic',
   },
 });
 

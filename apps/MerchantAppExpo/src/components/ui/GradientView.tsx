@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
-import { Colors } from '@theme/config';
+import { Colors } from '../../theme/config';
 
 // TODO: Re-enable LinearGradient once native module is properly configured
 // import LinearGradient from 'react-native-linear-gradient';

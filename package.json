@@ -6,13 +6,14 @@
     "dev": "turbo run dev",
     "dev:api": "turbo run dev --filter=api",
     "dev:app": "turbo run dev --filter=merchant-app",
+    "dev:admin": "turbo run dev --filter=admin-dashboard",
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
-    "db:push": "turbo run db:push --filter=api",
-    "db:generate": "turbo run db:generate --filter=api",
-    "db:studio": "turbo run db:studio --filter=api",
+    "db:push": "turbo run db:push --filter=@salex/shared-types",
+    "db:generate": "turbo run db:generate --filter=@salex/shared-types",
+    "db:studio": "turbo run db:studio --filter=@salex/shared-types",
     "prepare": "husky install"
   },
   "devDependencies": {

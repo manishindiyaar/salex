@@ -1,10 +1,63 @@
 /**
- * packages/shared-types
- * Single source of truth for domain models, DTOs, and API contracts.
+ * @salex/shared-types
+ * 
+ * Single source of truth for domain models, DTOs, API contracts,
+ * Prisma client, and Zod validation schemas.
+ * 
  * IMPORTANT: App code must import exclusively from this package.
  */
 
-/* ========== Common/Utility ========== */
+// ============================================
+// PRISMA CLIENT & DATABASE
+// ============================================
+export { prisma, PrismaClient, Prisma } from './db';
+
+// Re-export Prisma types for convenience
+export type {
+  User,
+  Otp,
+  Customer,
+  Business,
+  Service,
+  Booking,
+  BookingItem,
+  WhatsAppConversation,
+  WhatsAppMessage,
+  CustomerSession,
+  SimulatorMessage,
+  UserRole,
+  BookingStatus,
+  PaymentMode,
+  Resource,
+  Staff,
+  ResourceStaffLink,
+  // New subscription types
+  Subscription,
+  PaymentRecord,
+  AdminUser,
+  AuditLog,
+  NicheTemplate,
+  FeatureModule,
+  BusinessModuleConfig,
+  SubscriptionPlan,
+  SubscriptionStatus,
+  AdminRole,
+  BusinessCategory,
+} from '@prisma/client';
+
+// ============================================
+// ZOD SCHEMAS
+// ============================================
+export * from './schemas';
+
+// ============================================
+// UTILITIES
+// ============================================
+export { formatZodErrors, getZodErrorMessages, getFirstZodError } from './utils/format-zod-errors';
+
+// ============================================
+// COMMON TYPES
+// ============================================
 export type ID = string;
 
 export interface Paginated<T> {
@@ -14,138 +67,181 @@ export interface Paginated<T> {
   pageSize: number;
 }
 
-/* ========== API Contracts (error/response) ========== */
+// ============================================
+// API CONTRACTS
+// ============================================
 export interface ApiError {
   code: string;
   message: string;
-  details?: unknown;
-  status?: number;
+  details?: Record<string, string[]>;
+  correlationId?: string;
 }
 
 export interface ApiResponse<T> {
-  data: T;
-  meta?: Record<string, unknown>;
+  success: boolean;
+  data?: T;
+  error?: ApiError;
+  meta?: {
+    page?: number;
+    pageSize?: number;
+    total?: number;
+  };
 }
 
-/* ========== Business ========== */
-export interface Business {
-  id: ID;
-  name: string;
-  businessType: 'SALON';
-  phoneNumber: string;
-  address: string;
-  description?: string;
-  hoursOfOperation?: Record<string, { open: string; close: string; closed: boolean }>;
-  ownerId: string;
-  routingCode?: string;
-  createdAt?: string; // ISO
-  updatedAt?: string; // ISO
+// ============================================
+// AUTH TYPES
+// ============================================
+export interface AuthContext {
+  userId: string;
+  phone: string;
+  role: string;
 }
 
-export interface CreateBusinessRequest {
-  name: string;
-  businessType: 'SALON'; // Currently only SALON supported
-  phoneNumber: string; // E.164 format required
-  address: string; // 10-200 characters required
-  hoursOfOperation?: Record<string, { open: string; close: string; closed: boolean }>;
+export interface JwtPayload {
+  sub: string;  // user.id (UUID from Postgres)
+  phone: string;
+  role: string;
+  iat: number;
+  exp: number;
 }
 
-export interface UpdateBusinessRequest {
-  name?: string;
-  businessType?: 'SALON';
-  phoneNumber?: string; // E.164 format
-  address?: string; // 10-200 characters
-  hoursOfOperation?: Record<string, { open: string; close: string; closed: boolean }>;
+// ============================================
+// WHATSAPP TYPES
+// ============================================
+export interface WhatsAppWebhookPayload {
+  object: 'whatsapp_business_account';
+  entry: Array<{
+    id: string;
+    changes: Array<{
+      value: {
+        messaging_product: 'whatsapp';
+        metadata: {
+          display_phone_number: string;
+          phone_number_id: string;
+        };
+        contacts?: Array<{
+          wa_id: string;
+          profile: { name: string };
+        }>;
+        messages?: Array<{
+          id: string;
+          from: string;
+          timestamp: string;
+          type: 'text' | 'interactive' | 'button';
+          text?: { body: string };
+          interactive?: {
+            type: 'button_reply' | 'list_reply';
+            button_reply?: { id: string; title: string };
+            list_reply?: { id: string; title: string };
+          };
+        }>;
+        statuses?: Array<{
+          id: string;
+          status: 'sent' | 'delivered' | 'read' | 'failed';
+          timestamp: string;
+          recipient_id: string;
+        }>;
+      };
+      field: string;
+    }>;
+  }>;
 }
 
-/* ========== Service (Catalog) ========== */
-export interface Service {
-  id: ID;
-  businessId: ID;
-  name: string;
-  description?: string;
-  durationMinutes: number;
-  priceCents: number;
-  currency?: string;
-  active?: boolean;
-  createdAt?: string; // ISO
-  updatedAt?: string; // ISO
+export interface WhatsAppOutgoingMessage {
+  messaging_product: 'whatsapp';
+  recipient_type: 'individual';
+  to: string;
+  type: 'text' | 'interactive' | 'template';
+  text?: { body: string };
+  interactive?: {
+    type: 'button' | 'list';
+    header?: { type: 'text'; text: string };
+    body: { text: string };
+    footer?: { text: string };
+    action: {
+      buttons?: Array<{
+        type: 'reply';
+        reply: { id: string; title: string };
+      }>;
+      button?: string;
+      sections?: Array<{
+        title: string;
+        rows: Array<{ id: string; title: string; description?: string }>;
+      }>;
+    };
+  };
+  template?: {
+    name: string;
+    language: { code: string };
+    components?: Array<{
+      type: 'body' | 'header';
+      parameters: Array<{ type: 'text'; text: string }>;
+    }>;
+  };
 }
 
-export interface CreateServiceRequest {
-  businessId: ID;
-  name: string;
-  description?: string;
-  durationMinutes: number;
-  priceCents: number;
-  currency?: string;
-  active?: boolean;
+// ============================================
+// AVAILABILITY TYPES
+// ============================================
+export interface AvailabilityResult {
+  available: boolean;
+  currentCount: number;
+  maxCapacity: number;
+  conflictingBookings?: Array<{
+    id: string;
+    scheduledAt: Date;
+    endAt: Date;
+  }>;
 }
 
-export interface UpdateServiceRequest {
-  name?: string;
-  description?: string;
-  durationMinutes?: number;
-  priceCents?: number;
-  currency?: string;
-  active?: boolean;
+// ============================================
+// BOOKING TYPES (Extended)
+// ============================================
+export interface BookingWithItems {
+  id: string;
+  businessId: string;
+  customerId: string | null;
+  status: string;
+  scheduledAt: Date;
+  endAt: Date;
+  totalPrice: number;
+  paymentMode: string | null;
+  notes: string | null;
+  source: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  items: Array<{
+    id: string;
+    serviceId: string;
+    nameSnapshot: string;
+    priceSnapshot: number;
+  }>;
+  customer?: {
+    id: string;
+    phoneNumber: string;
+    name: string | null;
+  } | null;
 }
 
-/* ========== Booking ========== */
-export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
-
-export interface Booking {
-  id: ID;
-  businessId: ID;
-  serviceId: ID;
-  customerId?: ID;
-  startTime: string; // ISO
-  endTime: string; // ISO
-  status: BookingStatus;
-  notes?: string;
-  createdAt?: string; // ISO
-  updatedAt?: string; // ISO
+// ============================================
+// SIMULATOR TYPES
+// ============================================
+export interface SimulatorSendRequest {
+  customerPhone: string;
+  businessPhone: string;
+  message: string;
+  messageType?: 'text' | 'interactive';
 }
 
-export interface CreateBookingRequest {
-  businessId: ID;
-  serviceId: ID;
-  customerId?: ID;
-  startTime: string; // ISO
-  notes?: string;
+export interface SimulatorPollResponse {
+  success: boolean;
+  data: Array<{
+    id: string;
+    conversationId: string;
+    messageType: string;
+    content: Record<string, unknown>;
+    timestamp: Date;
+    delivered: boolean;
+  }>;
+  hasMore: boolean;
 }
-
-export interface UpdateBookingRequest {
-  startTime?: string; // ISO
-  endTime?: string; // ISO
-  status?: BookingStatus;
-  notes?: string;
-}
-
-/* ========== Analytics ========== */
-export interface RevenueByDay {
-  date: string; // YYYY-MM-DD
-  revenueCents: number;
-  bookings: number;
-}
-
-export interface TopServicesItem {
-  serviceId: ID;
-  name: string;
-  count: number;
-  revenueCents: number;
-}
-
-export interface AnalyticsSummary {
-  businessId: ID;
-  totalRevenueCents: number;
-  totalBookings: number;
-  uniqueCustomers: number;
-  revenueByDay: RevenueByDay[];
-  topServices: TopServicesItem[];
-  from?: string; // ISO
-  to?: string; // ISO
-}
-
-/* ========== Re-exports for package consumers ========== */
-// Nothing else needed; this file is the public surface.
