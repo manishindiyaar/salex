@@ -21,7 +21,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 // Default admin credentials (can be overridden via env vars)
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@salex.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'M@nish7791@admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const ADMIN_NAME = process.env.ADMIN_NAME || 'Super Admin';
 
 async function createAdminUser() {
