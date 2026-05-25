@@ -4,9 +4,8 @@
  * Handles admin operations for viewing audit logs
  */
 
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { z } from 'zod';
-import { logger } from '../utils/logger';
 import { ValidationError } from '../utils/errors';
 import { AdminRequest } from '../middlewares/admin-auth.middleware';
 import { auditLogService } from '../services/audit-log.service';
@@ -17,7 +16,8 @@ const ListAuditLogsSchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
   action: z.string().optional(),
   entityType: z.string().optional(),
-  adminId: z.string().uuid().optional(),
+  entityId: z.string().optional(),
+  adminId: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
 });
@@ -30,11 +30,12 @@ class AdminAuditController {
   async listAuditLogs(req: AdminRequest, res: Response) {
     try {
       const query = ListAuditLogsSchema.parse(req.query);
-      const { page, limit, action, entityType, adminId, startDate, endDate } = query;
+      const { page, limit, action, entityType, entityId, adminId, startDate, endDate } = query;
 
       const filters: any = {};
       if (action) filters.action = action;
       if (entityType) filters.entityType = entityType;
+      if (entityId) filters.entityId = entityId;
       if (adminId) filters.adminId = adminId;
       if (startDate) filters.startDate = new Date(startDate);
       if (endDate) filters.endDate = new Date(endDate);

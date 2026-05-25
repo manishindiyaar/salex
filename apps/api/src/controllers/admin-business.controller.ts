@@ -8,9 +8,9 @@
  * - Changing subscription plans
  */
 
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { z } from 'zod';
-import { prisma, SubscriptionPlan } from '@salex/shared-types';
+import { prisma } from '@salex/shared-types';
 import { logger } from '../utils/logger';
 import { NotFoundError, ValidationError, BusinessRuleError } from '../utils/errors';
 import { AdminRequest } from '../middlewares/admin-auth.middleware';
@@ -34,6 +34,15 @@ const ListBusinessesSchema = z.object({
 const ChangePlanSchema = z.object({
   plan: z.enum(['BASIC', 'PRO', 'CUSTOM']),
   reason: z.string().min(1, 'Reason is required for plan changes'),
+});
+
+const ToggleStatusSchema = z.object({
+  reason: z.string().min(1, 'Reason is required for status changes'),
+});
+
+const SupportNoteSchema = z.object({
+  body: z.string().min(1, 'Support note is required').max(2000),
+  status: z.enum(['OPEN', 'FOLLOW_UP', 'RESOLVED']).default('OPEN'),
 });
 
 class AdminBusinessController {
@@ -177,10 +186,9 @@ class AdminBusinessController {
    * Get detailed business information with analytics
    */
   async getBusinessDetails(req: AdminRequest, res: Response) {
-    try {
-      const { id } = req.params;
+    const { id } = req.params;
 
-      const business = await prisma.business.findUnique({
+    const business = await prisma.business.findUnique({
         where: { id },
         include: {
           subscription: {
@@ -206,13 +214,31 @@ class AdminBusinessController {
             where: { isActive: true },
             select: { id: true, name: true, phone: true },
           },
-          moduleConfigs: true,
+          whatsAppChannel: true,
+          bookingAttempts: {
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+          },
+          supportNotes: {
+            orderBy: { createdAt: 'desc' },
+            take: 20,
+            include: {
+              admin: {
+                select: { id: true, name: true, email: true, role: true },
+              },
+            },
+          },
           bookings: {
             orderBy: { createdAt: 'desc' },
             take: 20,
             include: {
               customer: {
                 select: { id: true, name: true, phoneNumber: true },
+              },
+              businessCustomer: {
+                include: {
+                  person: true,
+                },
               },
               items: {
                 include: {
@@ -224,25 +250,47 @@ class AdminBusinessController {
             },
           },
         },
-      });
+    });
 
-      if (!business) {
-        throw new NotFoundError('Business not found');
-      }
-
-      // Calculate analytics
-      const analytics = await this.calculateBusinessAnalytics(id);
-
-      res.json({
-        success: true,
-        data: {
-          business,
-          analytics,
-        },
-      });
-    } catch (error) {
-      throw error;
+    if (!business) {
+      throw new NotFoundError('Business not found');
     }
+
+    // Calculate analytics
+    const analytics = await this.calculateBusinessAnalytics(id);
+    const whatsappMessages = await prisma.whatsAppMessage.findMany({
+        where: {
+          conversation: {
+            businessId: id,
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        include: {
+          conversation: {
+            select: {
+              id: true,
+              customerPhone: true,
+              state: true,
+            },
+          },
+        },
+    });
+
+    const businessPayload = {
+      ...business,
+      whatsappChannels: business.whatsAppChannel ? [business.whatsAppChannel] : [],
+      bookingDiagnostics: business.bookingAttempts,
+      whatsappMessageAudit: whatsappMessages,
+    };
+
+    res.json({
+      success: true,
+      data: {
+        business: businessPayload,
+        analytics,
+      },
+    });
   }
 
   /**
@@ -252,7 +300,7 @@ class AdminBusinessController {
   async toggleBusinessStatus(req: AdminRequest, res: Response) {
     try {
       const { id } = req.params;
-      const { reason } = req.body;
+      const { reason } = ToggleStatusSchema.parse(req.body);
 
       const business = await prisma.business.findUnique({
         where: { id },
@@ -301,6 +349,9 @@ class AdminBusinessController {
         },
       });
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Invalid request data', error.errors);
+      }
       throw error;
     }
   }
@@ -323,22 +374,32 @@ class AdminBusinessController {
         throw new NotFoundError('Business not found');
       }
 
-      if (!business.subscription) {
-        throw new BusinessRuleError('Business has no subscription to modify');
+      let subscription = business.subscription;
+
+      if (!subscription) {
+        // Automatically create a subscription if one doesn't exist to heal legacy/seeded data
+        subscription = await prisma.subscription.create({
+          data: {
+            businessId: id,
+            plan: 'BASIC',
+            status: 'TRIAL',
+            trialEndsAt: new Date(),
+          },
+        });
       }
 
-      const oldPlan = business.subscription.plan;
+      const oldPlan = subscription.plan;
 
       // Update subscription plan
       const updatedSubscription = await subscriptionService.updatePlan(
-        business.subscription.id,
+        subscription.id,
         plan
       );
 
       // Create audit log entry
       await auditLogService.logSubscriptionPlanChange(
         req.admin.adminId,
-        business.subscription.id,
+        subscription.id,
         id,
         oldPlan,
         plan,
@@ -350,7 +411,7 @@ class AdminBusinessController {
         {
           adminId: req.admin.adminId,
           businessId: id,
-          subscriptionId: business.subscription.id,
+          subscriptionId: subscription.id,
           action: 'CHANGE_SUBSCRIPTION_PLAN',
           oldPlan,
           newPlan: plan,
@@ -369,6 +430,202 @@ class AdminBusinessController {
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new ValidationError('Invalid request data', error.errors);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * GET /v1/admin/businesses/:id/diagnostics/bookings
+   * Get recent booking attempts for a business.
+   */
+  async getBookingDiagnostics(req: AdminRequest, res: Response) {
+    const { id } = req.params;
+
+    await this.ensureBusinessExists(id);
+
+    const attempts = await prisma.bookingAttempt.findMany({
+      where: { businessId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        businessCustomer: {
+          include: {
+            person: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: { attempts },
+    });
+  }
+
+  /**
+   * GET /v1/admin/businesses/:id/diagnostics/whatsapp
+   * Get recent WhatsApp message audit rows for a business.
+   */
+  async getWhatsAppAudit(req: AdminRequest, res: Response) {
+    const { id } = req.params;
+
+    await this.ensureBusinessExists(id);
+
+    const messages = await prisma.whatsAppMessage.findMany({
+      where: {
+        conversation: {
+          businessId: id,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        conversation: {
+          select: {
+            id: true,
+            customerPhone: true,
+            state: true,
+          },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: { messages },
+    });
+  }
+
+  /**
+   * GET /v1/admin/businesses/:id/support-notes
+   * List support notes for a business.
+   */
+  async listSupportNotes(req: AdminRequest, res: Response) {
+    const { id } = req.params;
+
+    await this.ensureBusinessExists(id);
+
+    const notes = await prisma.supportNote.findMany({
+      where: { businessId: id },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        admin: {
+          select: { id: true, name: true, email: true, role: true },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: { notes },
+    });
+  }
+
+  /**
+   * POST /v1/admin/businesses/:id/support-notes
+   * Create an internal support note for a business.
+   */
+  async createSupportNote(req: AdminRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const data = SupportNoteSchema.parse(req.body);
+
+      await this.ensureBusinessExists(id);
+
+      const note = await prisma.supportNote.create({
+        data: {
+          businessId: id,
+          adminId: req.admin.adminId,
+          body: data.body,
+          status: data.status,
+        },
+        include: {
+          admin: {
+            select: { id: true, name: true, email: true, role: true },
+          },
+        },
+      });
+
+      await auditLogService.logAction({
+        adminId: req.admin.adminId,
+        action: 'CREATE_SUPPORT_NOTE',
+        entityType: 'Business',
+        entityId: id,
+        changes: {
+          noteId: note.id,
+          status: note.status,
+        },
+        reason: 'Support note created',
+      });
+
+      res.status(201).json({
+        success: true,
+        data: { note },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Invalid support note data', error.errors);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * PATCH /v1/admin/businesses/:id/support-notes/:noteId
+   * Update the status of a support note.
+   */
+  async updateSupportNoteStatus(req: AdminRequest, res: Response) {
+    try {
+      const { id, noteId } = req.params;
+      const UpdateSupportNoteSchema = z.object({
+        status: z.enum(['OPEN', 'FOLLOW_UP', 'RESOLVED']),
+      });
+      const data = UpdateSupportNoteSchema.parse(req.body);
+
+      await this.ensureBusinessExists(id);
+
+      const note = await prisma.supportNote.findUnique({
+        where: { id: noteId },
+      });
+
+      if (!note) {
+        throw new NotFoundError('Support note not found');
+      }
+
+      if (note.businessId !== id) {
+        throw new BusinessRuleError('Support note does not belong to this business');
+      }
+
+      const updatedNote = await prisma.supportNote.update({
+        where: { id: noteId },
+        data: { status: data.status },
+        include: {
+          admin: {
+            select: { id: true, name: true, email: true, role: true },
+          },
+        },
+      });
+
+      await auditLogService.logAction({
+        adminId: req.admin.adminId,
+        action: 'UPDATE_SUPPORT_NOTE_STATUS',
+        entityType: 'SupportNote',
+        entityId: noteId,
+        changes: {
+          oldStatus: note.status,
+          newStatus: data.status,
+        },
+        reason: 'Support note status updated',
+      });
+
+      res.json({
+        success: true,
+        data: { note: updatedNote },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        throw new ValidationError('Invalid support note status update data', error.errors);
       }
       throw error;
     }
@@ -437,19 +694,17 @@ class AdminBusinessController {
         _sum: { totalPrice: true },
       }),
       // Total unique customers
-      prisma.booking.findMany({
+      prisma.businessCustomer.findMany({
         where: { businessId },
-        select: { customerId: true },
-        distinct: ['customerId'],
+        select: { id: true },
       }),
       // Recent unique customers (30 days)
-      prisma.booking.findMany({
+      prisma.businessCustomer.findMany({
         where: {
           businessId,
           createdAt: { gte: thirtyDaysAgo },
         },
-        select: { customerId: true },
-        distinct: ['customerId'],
+        select: { id: true },
       }),
     ]);
 
@@ -469,6 +724,19 @@ class AdminBusinessController {
         recent: recentCustomers.length,
       },
     };
+  }
+
+  private async ensureBusinessExists(id: string) {
+    const business = await prisma.business.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!business) {
+      throw new NotFoundError('Business not found');
+    }
+
+    return business;
   }
 }
 

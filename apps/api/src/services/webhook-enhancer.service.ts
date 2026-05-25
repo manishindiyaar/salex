@@ -226,6 +226,7 @@ class WebhookEnhancerService {
     messageText?: string;
     interactiveReply?: { type: string; id: string; title: string; description?: string };
     customerName?: string;
+    phoneNumberId: string;
   } | null {
     try {
       const entry = payload.entry?.[0];
@@ -244,6 +245,7 @@ class WebhookEnhancerService {
         messageId: message.id,
         messageType: message.type,
         customerName: contact?.profile?.name,
+        phoneNumberId: value.metadata.phone_number_id,
       };
 
       // Extract text message

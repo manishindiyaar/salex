@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardHeader, CardBody, Alert } from '@/components';
 import { apiClient } from '@/services/apiClient';
-import { TrendingUp, Users, CreditCard, Activity, AlertCircle } from 'lucide-react';
+import { TrendingUp, Users, Activity, AlertCircle } from 'lucide-react';
 
 interface HealthStatus {
   status: 'healthy' | 'degraded' | 'down';

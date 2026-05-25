@@ -1,0 +1,13 @@
+process.env.NODE_ENV ||= 'test';
+process.env.DATABASE_URL ||= 'postgres://test:test@localhost:5432/test';
+process.env.DIRECT_URL ||= 'postgres://test:test@localhost:5432/test';
+process.env.SUPABASE_URL ||= 'https://example.supabase.co';
+process.env.SUPABASE_ANON_KEY ||= 'test-anon-key';
+process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'test-service-key';
+process.env.SUPABASE_JWT_SECRET ||= 'test-jwt-secret';
+process.env.WHATSAPP_MODE ||= 'simulator';
+process.env.WHATSAPP_VERIFY_TOKEN ||= 'test-verify-token';
+process.env.WHATSAPP_APP_SECRET ||= 'test-app-secret';
+process.env.WHATSAPP_ACCESS_TOKEN ||= 'test-access-token';
+process.env.WHATSAPP_PHONE_NUMBER_ID ||= 'test-phone-number-id';
+process.env.WHATSAPP_GRAPH_API_VERSION ||= 'v25.0';

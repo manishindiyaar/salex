@@ -7,8 +7,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")   // Connection Pooler (port 6543) for runtime
-  directUrl = env("DIRECT_URL")     // Direct Connection (port 5432) for migrations
+  url       = env("DATABASE_URL") // Connection Pooler (port 6543) for runtime
+  directUrl = env("DIRECT_URL") // Direct Connection (port 5432) for migrations
 }
 
 // ============================================
@@ -52,7 +52,6 @@ enum SubscriptionStatus {
 enum AdminRole {
   SUPER_ADMIN
   ADMIN
-  SUPPORT
 }
 
 enum BusinessCategory {
@@ -82,8 +81,8 @@ model User {
 /// OTP storage for phone verification
 model Otp {
   id        String   @id @default(cuid())
-  phone     String   // E.164 format
-  code      String   // The 6-digit code
+  phone     String // E.164 format
+  code      String // The 6-digit code
   attempts  Int      @default(0)
   expiresAt DateTime
   createdAt DateTime @default(now())
@@ -112,24 +111,29 @@ model Business {
   name                  String
   phoneNumber           String
   routingCode           String?          @unique @db.VarChar(4)
-  category              BusinessCategory @default(SALON)  // NEW
+  slug                  String?          @unique
+  category              BusinessCategory @default(SALON) // NEW
   hoursOfOperation      Json?
   maxConcurrentBookings Int              @default(1)
   isAcceptingOrders     Boolean          @default(true)
-  isActive              Boolean          @default(true)   // NEW - Admin toggle
+  isActive              Boolean          @default(true) // NEW - Admin toggle
   onboardingCompleted   Boolean          @default(false)
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
-  owner         User                   @relation(fields: [ownerId], references: [id])
-  subscription  Subscription?          // NEW - One-to-one relation
-  moduleConfigs BusinessModuleConfig[] // NEW - Module configurations
-  services      Service[]
-  bookings      Booking[]
-  conversations WhatsAppConversation[]
-  sessions      CustomerSession[]
-  resources     Resource[]
-  staff         Staff[]
+  owner                User                   @relation(fields: [ownerId], references: [id])
+  subscription         Subscription? // NEW - One-to-one relation
+  services             Service[]
+  bookings             Booking[]
+  conversations        WhatsAppConversation[]
+  sessions             CustomerSession[]
+  resources            Resource[]
+  staff                Staff[]
+  businessCustomers    BusinessCustomer[]
+  bookingStatusHistory BookingStatusHistory[]
+  bookingAttempts      BookingAttempt[]
+  supportNotes         SupportNote[]
+  whatsAppChannel      WhatsAppChannel?
 
   @@index([routingCode])
   @@index([category])
@@ -166,12 +170,12 @@ model PaymentRecord {
   subscriptionId String
   amount         Decimal  @db.Decimal(10, 2)
   currency       String   @default("INR")
-  paymentMethod  String   // "gpay" | "upi" | "bank_transfer"
+  paymentMethod  String // "gpay" | "upi" | "bank_transfer"
   transactionRef String?
   periodStart    DateTime
   periodEnd      DateTime
   notes          String?
-  recordedBy     String?  // Admin user ID
+  recordedBy     String? // Admin user ID
   createdAt      DateTime @default(now())
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id])
@@ -189,22 +193,23 @@ model AdminUser {
   id        String    @id @default(cuid())
   email     String    @unique
   name      String
-  role      AdminRole @default(SUPPORT)
+  role      AdminRole @default(ADMIN)
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  auditLogs AuditLog[]
+  auditLogs    AuditLog[]
+  supportNotes SupportNote[]
 }
 
 /// Audit log for tracking admin actions
 model AuditLog {
   id         String   @id @default(cuid())
   adminId    String
-  action     String   // "TOGGLE_BUSINESS", "RECORD_PAYMENT", etc.
-  entityType String   // "Business", "Subscription", "NicheTemplate"
+  action     String // "TOGGLE_BUSINESS", "RECORD_PAYMENT", etc.
+  entityType String // "Business", "Subscription", etc.
   entityId   String
-  changes    Json     // { previousValue, newValue }
+  changes    Json // { previousValue, newValue }
   reason     String?
   createdAt  DateTime @default(now())
 
@@ -214,52 +219,6 @@ model AuditLog {
   @@index([action])
   @@index([entityType, entityId])
   @@index([createdAt])
-}
-
-// ============================================
-// NICHE TEMPLATE & MODULE MODELS
-// ============================================
-
-/// Niche template for business category configuration
-model NicheTemplate {
-  id               String   @id @default(cuid())
-  code             String   @unique  // "SALON", "CLINIC", etc.
-  displayName      String
-  icon             String
-  terminology      Json     // TerminologyConfig
-  enabledModules   String[] // ["appointment_booking", "walk_in_queue"]
-  defaultServices  Json     // Array of default services
-  defaultHours     Json     // { open: "09:00", close: "21:00" }
-  messageTemplates Json     // WhatsApp message templates
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-}
-
-/// Feature module definition
-model FeatureModule {
-  id          String   @id @default(cuid())
-  code        String   @unique  // "appointment_booking", "walk_in_queue"
-  name        String
-  description String?
-  plans       String[] // ["BASIC", "PRO", "CUSTOM"]
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
-/// Business-specific module configuration overrides
-model BusinessModuleConfig {
-  id         String   @id @default(cuid())
-  businessId String
-  moduleCode String
-  isEnabled  Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  business Business @relation(fields: [businessId], references: [id])
-
-  @@unique([businessId, moduleCode])
 }
 
 /// Service offered by a business
@@ -341,26 +300,29 @@ model ResourceStaffLink {
 
 /// Booking with multi-service support and resource/staff allocation
 model Booking {
-  id          String        @id @default(cuid())
-  businessId  String
-  customerId  String?
-  resourceId  String?
-  staffId     String?
-  status      BookingStatus @default(PENDING)
-  scheduledAt DateTime
-  endAt       DateTime
-  totalPrice  Decimal       @default(0) @db.Decimal(10, 2)
-  paymentMode PaymentMode?
-  notes       String?
-  source      String?       // "whatsapp" | "manual" | "walk-in"
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                 String        @id @default(cuid())
+  businessId         String
+  customerId         String?
+  businessCustomerId String?
+  resourceId         String?
+  staffId            String?
+  status             BookingStatus @default(PENDING)
+  scheduledAt        DateTime
+  endAt              DateTime
+  totalPrice         Decimal       @default(0) @db.Decimal(10, 2)
+  paymentMode        PaymentMode?
+  notes              String?
+  source             String? // "whatsapp" | "manual" | "walk-in"
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
-  business Business      @relation(fields: [businessId], references: [id])
-  customer Customer?     @relation(fields: [customerId], references: [id])
-  resource Resource?     @relation(fields: [resourceId], references: [id])
-  staff    Staff?        @relation(fields: [staffId], references: [id])
-  items    BookingItem[]
+  business         Business               @relation(fields: [businessId], references: [id])
+  customer         Customer?              @relation(fields: [customerId], references: [id])
+  businessCustomer BusinessCustomer?      @relation(fields: [businessCustomerId], references: [id])
+  resource         Resource?              @relation(fields: [resourceId], references: [id])
+  staff            Staff?                 @relation(fields: [staffId], references: [id])
+  items            BookingItem[]
+  statusHistory    BookingStatusHistory[]
 
   @@index([businessId, scheduledAt])
   @@index([resourceId, scheduledAt])
@@ -394,8 +356,8 @@ model WhatsAppConversation {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  customer Customer?          @relation(fields: [customerPhone], references: [phoneNumber])
-  business Business?          @relation(fields: [businessId], references: [id])
+  customer Customer?         @relation(fields: [customerPhone], references: [phoneNumber])
+  business Business?         @relation(fields: [businessId], references: [id])
   messages WhatsAppMessage[]
 
   @@unique([customerPhone, businessId])
@@ -406,8 +368,8 @@ model WhatsAppMessage {
   id                String   @id @default(cuid())
   conversationId    String
   whatsappMessageId String?  @unique
-  direction         String   // "inbound" | "outbound"
-  messageType       String   // "text" | "interactive" | "button" | "template"
+  direction         String // "inbound" | "outbound"
+  messageType       String // "text" | "interactive" | "button" | "template"
   content           Json
   status            String   @default("sent") // "sent" | "delivered" | "read" | "failed"
   createdAt         DateTime @default(now())
@@ -440,17 +402,136 @@ model CustomerSession {
 
 /// Simulator message storage for polling
 model SimulatorMessage {
-  id           String   @id @default(cuid())
-  sessionId    String
-  messageId    String   @unique @default(cuid())
-  fromPhone    String
-  toPhone      String
-  messageType  String   // "text" | "interactive"
-  content      Json
-  timestamp    DateTime @default(now())
-  isFromCustomer Boolean @default(true)
-  delivered    Boolean  @default(false)
-  read         Boolean  @default(false)
+  id             String   @id @default(cuid())
+  sessionId      String
+  messageId      String   @unique @default(cuid())
+  fromPhone      String
+  toPhone        String
+  messageType    String // "text" | "interactive"
+  content        Json
+  timestamp      DateTime @default(now())
+  isFromCustomer Boolean  @default(true)
+  delivered      Boolean  @default(false)
+  read           Boolean  @default(false)
 
   session CustomerSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+// ============================================
+// FOUNDATION V2 MODELS
+// ============================================
+
+/// Global person identity (tied to phone number)
+model Person {
+  id          String   @id @default(cuid())
+  phoneNumber String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  businessCustomers BusinessCustomer[]
+}
+
+/// Business-specific customer record
+model BusinessCustomer {
+  id               String    @id @default(cuid())
+  businessId       String
+  personId         String
+  displayName      String?
+  isBlocked        Boolean   @default(false)
+  notes            String?
+  preferences      Json?
+  lastInteractedAt DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  business        Business         @relation(fields: [businessId], references: [id])
+  person          Person           @relation(fields: [personId], references: [id])
+  bookings        Booking[]
+  bookingAttempts BookingAttempt[]
+
+  @@unique([businessId, personId])
+  @@index([businessId])
+  @@index([personId])
+}
+
+/// Status history for bookings
+model BookingStatusHistory {
+  id            String         @id @default(cuid())
+  bookingId     String
+  businessId    String
+  fromStatus    BookingStatus?
+  toStatus      BookingStatus
+  changedByType String // "SYSTEM" | "ADMIN" | "MERCHANT" | "CUSTOMER"
+  changedById   String? // ID of the user/admin who changed it
+  reason        String?
+  createdAt     DateTime       @default(now())
+
+  booking  Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id])
+
+  @@index([bookingId])
+  @@index([businessId])
+  @@index([createdAt])
+}
+
+/// Attempt log for booking flow
+model BookingAttempt {
+  id                 String   @id @default(cuid())
+  businessId         String?
+  businessCustomerId String?
+  channel            String // "MERCHANT_APP" | "WHATSAPP" | "ADMIN"
+  stage              String
+  status             String // "STARTED" | "FAILED" | "SUCCEEDED"
+  failureCode        String?
+  failureMessage     String?
+  context            Json?
+  createdAt          DateTime @default(now())
+
+  business         Business?         @relation(fields: [businessId], references: [id])
+  businessCustomer BusinessCustomer? @relation(fields: [businessCustomerId], references: [id])
+
+  @@index([businessId])
+  @@index([businessCustomerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+/// Internal support notes for a business
+model SupportNote {
+  id         String   @id @default(cuid())
+  businessId String
+  adminId    String
+  body       String
+  status     String   @default("OPEN") // "OPEN" | "FOLLOW_UP" | "RESOLVED"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business  @relation(fields: [businessId], references: [id])
+  admin    AdminUser @relation(fields: [adminId], references: [id])
+
+  @@index([businessId])
+  @@index([adminId])
+}
+
+/// WhatsApp Channel configuration
+model WhatsAppChannel {
+  id                 String    @id @default(cuid())
+  businessId         String?   @unique
+  mode               String // "SHARED" | "DEDICATED"
+  displayPhoneNumber String
+  phoneNumberId      String    @unique
+  wabaId             String?
+  status             String    @default("PENDING") // "PENDING" | "CONNECTED" | "DISABLED" | "FAILED"
+  qualityRating      String?
+  messagingLimit     String?
+  lastInboundAt      DateTime?
+  lastOutboundAt     DateTime?
+  lastHealthCheckAt  DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  business Business? @relation(fields: [businessId], references: [id])
+
+  @@index([businessId])
+  @@index([phoneNumberId])
 }

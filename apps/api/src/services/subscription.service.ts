@@ -39,6 +39,8 @@ interface RecordPaymentInput {
   amount: number;
   paymentMethod: string;
   transactionRef?: string;
+  periodStart?: Date;
+  periodEnd?: Date;
   notes?: string;
   recordedBy?: string; // Admin user ID
 }
@@ -285,14 +287,16 @@ class SubscriptionService {
    * Creates PaymentRecord and transitions subscription to ACTIVE
    */
   async recordPayment(input: RecordPaymentInput): Promise<{ subscription: Subscription; payment: PaymentRecord }> {
-    const { subscriptionId, amount, paymentMethod, transactionRef, notes, recordedBy } = input;
+    const { subscriptionId, amount, paymentMethod, transactionRef, periodStart: inputPeriodStart, periodEnd: inputPeriodEnd, notes, recordedBy } = input;
 
     const subscription = await this.getById(subscriptionId);
 
-    // Calculate billing period (30 days from now)
-    const periodStart = new Date();
-    const periodEnd = new Date();
-    periodEnd.setDate(periodEnd.getDate() + 30);
+    // Calculate billing period (use input or default to 30 days from now)
+    const periodStart = inputPeriodStart || new Date();
+    const periodEnd = inputPeriodEnd || new Date();
+    if (!inputPeriodEnd) {
+      periodEnd.setDate(periodEnd.getDate() + 30);
+    }
 
     // Create payment record and update subscription in a transaction
     const result = await prisma.$transaction(async (tx) => {

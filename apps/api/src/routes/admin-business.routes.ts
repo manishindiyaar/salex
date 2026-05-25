@@ -7,7 +7,6 @@
 import { Router } from 'express';
 import { adminBusinessController } from '../controllers/admin-business.controller';
 import { adminPaymentController } from '../controllers/admin-payment.controller';
-import { adminModuleController } from '../controllers/admin-module.controller';
 import { adminAuthMiddleware, requireAdminRole } from '../middlewares/admin-auth.middleware';
 import { asyncHandler } from '../utils/async-handler';
 
@@ -19,20 +18,20 @@ router.use(adminAuthMiddleware);
 /**
  * GET /v1/admin/businesses
  * List all businesses with pagination, search, and filters
- * Requires: SUPPORT role or higher
+ * Requires: ADMIN role or higher
  */
 router.get('/', 
-  requireAdminRole('SUPPORT'),
+  requireAdminRole('ADMIN'),
   asyncHandler(adminBusinessController.listBusinesses.bind(adminBusinessController))
 );
 
 /**
  * GET /v1/admin/businesses/:id
  * Get detailed business information with analytics
- * Requires: SUPPORT role or higher
+ * Requires: ADMIN role or higher
  */
 router.get('/:id', 
-  requireAdminRole('SUPPORT'),
+  requireAdminRole('ADMIN'),
   asyncHandler(adminBusinessController.getBusinessDetails.bind(adminBusinessController))
 );
 
@@ -59,31 +58,36 @@ router.patch('/:id/plan',
 /**
  * GET /v1/admin/businesses/:id/payments
  * Get payment history for a specific business
- * Requires: SUPPORT role or higher
+ * Requires: ADMIN role or higher
  */
 router.get('/:id/payments', 
-  requireAdminRole('SUPPORT'),
+  requireAdminRole('ADMIN'),
   asyncHandler(adminPaymentController.getBusinessPayments.bind(adminPaymentController))
 );
 
-/**
- * GET /v1/admin/businesses/:id/modules
- * Get business module configurations
- * Requires: SUPPORT role or higher
- */
-router.get('/:id/modules', 
-  requireAdminRole('SUPPORT'),
-  asyncHandler(adminModuleController.getBusinessModules.bind(adminModuleController))
+router.get('/:id/diagnostics/bookings',
+  requireAdminRole('ADMIN'),
+  asyncHandler(adminBusinessController.getBookingDiagnostics.bind(adminBusinessController))
 );
 
-/**
- * PATCH /v1/admin/businesses/:id/modules
- * Update business module configurations
- * Requires: ADMIN role or higher
- */
-router.patch('/:id/modules', 
+router.get('/:id/diagnostics/whatsapp',
   requireAdminRole('ADMIN'),
-  asyncHandler(adminModuleController.updateBusinessModules.bind(adminModuleController))
+  asyncHandler(adminBusinessController.getWhatsAppAudit.bind(adminBusinessController))
+);
+
+router.get('/:id/support-notes',
+  requireAdminRole('ADMIN'),
+  asyncHandler(adminBusinessController.listSupportNotes.bind(adminBusinessController))
+);
+
+router.post('/:id/support-notes',
+  requireAdminRole('ADMIN'),
+  asyncHandler(adminBusinessController.createSupportNote.bind(adminBusinessController))
+);
+
+router.patch('/:id/support-notes/:noteId',
+  requireAdminRole('ADMIN'),
+  asyncHandler(adminBusinessController.updateSupportNoteStatus.bind(adminBusinessController))
 );
 
 export { router as adminBusinessRoutes };

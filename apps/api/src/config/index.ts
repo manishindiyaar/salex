@@ -42,6 +42,7 @@ const configSchema = z.object({
   whatsappAccessToken: z.string().optional(),
   whatsappPhoneNumberId: z.string().optional(),
   whatsappVerifyToken: z.string().optional(),
+  whatsappGraphApiVersion: z.string().default('v25.0'),
   whatsappMode: z.enum(['production', 'simulator']).default('simulator'),
 
   // Simulator
@@ -76,6 +77,7 @@ function loadConfig(): AppConfig {
     whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN,
     whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
     whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
+    whatsappGraphApiVersion: process.env.WHATSAPP_GRAPH_API_VERSION,
     whatsappMode: process.env.WHATSAPP_MODE,
 
     simulatorDefaultBusinessId: process.env.SIMULATOR_DEFAULT_BUSINESS_ID,

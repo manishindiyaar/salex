@@ -17,20 +17,20 @@ router.use(adminAuthMiddleware);
 /**
  * GET /v1/admin/health
  * Check system health status
- * Requires: SUPPORT role or higher
+ * Requires: ADMIN role or higher
  */
 router.get('/', 
-  requireAdminRole('SUPPORT'),
+  requireAdminRole('ADMIN'),
   asyncHandler(adminHealthController.getSystemHealth.bind(adminHealthController))
 );
 
 /**
  * GET /v1/admin/stats
  * Get platform statistics
- * Requires: SUPPORT role or higher
+ * Requires: ADMIN role or higher
  */
 router.get('/stats', 
-  requireAdminRole('SUPPORT'),
+  requireAdminRole('ADMIN'),
   asyncHandler(adminHealthController.getPlatformStats.bind(adminHealthController))
 );
 

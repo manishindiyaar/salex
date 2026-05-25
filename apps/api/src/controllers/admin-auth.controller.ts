@@ -137,33 +137,29 @@ class AdminAuthController {
    * Get current admin user info
    */
   async me(req: AdminRequest, res: Response) {
-    try {
-      const adminUser = await prisma.adminUser.findUnique({
-        where: { id: req.admin.adminId },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-      });
+    const adminUser = await prisma.adminUser.findUnique({
+      where: { id: req.admin.adminId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
-      if (!adminUser) {
-        throw new UnauthorizedError('Admin user not found');
-      }
-
-      res.json({
-        success: true,
-        data: {
-          admin: adminUser,
-        },
-      });
-    } catch (error) {
-      throw error;
+    if (!adminUser) {
+      throw new UnauthorizedError('Admin user not found');
     }
+
+    res.json({
+      success: true,
+      data: {
+        admin: adminUser,
+      },
+    });
   }
 }
 

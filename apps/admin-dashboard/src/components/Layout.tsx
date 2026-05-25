@@ -1,14 +1,35 @@
 import React, { useState } from 'react';
-import { Menu, X, LogOut, Home, Users, CreditCard, Settings, BarChart3, Activity, FileText } from 'lucide-react';
+import {
+  X, LogOut, Home, Users, CreditCard,
+  Activity, FileText,
+  ChevronRight, Bell,
+} from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useNavigate, useLocation } from 'react-router-dom';
+import logoImg from '../salex_logo_bg_remove.png';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
+const NAV_ITEMS = [
+  { icon: Home,          label: 'Dashboard',     href: '/' },
+  { icon: Users,         label: 'Businesses',    href: '/businesses' },
+  { icon: CreditCard,    label: 'Payments',      href: '/payments' },
+  { icon: Activity,      label: 'System Health', href: '/system-health' },
+  { icon: FileText,      label: 'Audit Logs',    href: '/audit-logs' },
+];
+
+const PAGE_TITLES: Record<string, string> = {
+  '/':              'Dashboard',
+  '/businesses':    'Businesses',
+  '/payments':      'Payments',
+  '/system-health': 'System Health',
+  '/audit-logs':    'Audit Logs',
+};
+
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -18,95 +39,215 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate('/login');
   };
 
-  const menuItems = [
-    { icon: Home, label: 'Dashboard', href: '/' },
-    { icon: Users, label: 'Businesses', href: '/businesses' },
-    { icon: CreditCard, label: 'Payments', href: '/payments' },
-    { icon: Settings, label: 'Templates', href: '/templates' },
-    { icon: BarChart3, label: 'Analytics', href: '/analytics' },
-    { icon: Activity, label: 'System Health', href: '/system-health' },
-    { icon: FileText, label: 'Audit Logs', href: '/audit-logs' },
-  ];
-
   const isActive = (href: string) => {
     if (href === '/') return location.pathname === '/';
     return location.pathname.startsWith(href);
   };
 
+  // Compute page title
+  const pageTitle =
+    PAGE_TITLES[location.pathname] ??
+    (location.pathname.startsWith('/businesses/') ? 'Business Detail' : 'Admin');
+
   return (
-    <div className="flex h-screen bg-salex-black">
-      {/* Sidebar */}
+    <div className="flex h-screen overflow-hidden" style={{ background: '#FCFCFA' }}>
+      {/* ── Sidebar ───────────────────────────────────────────────── */}
       <aside
         className={`${
-          sidebarOpen ? 'w-64' : 'w-20'
-        } bg-salex-black-light border-r border-salex-gray-border transition-all duration-300 flex flex-col`}
+          collapsed ? 'w-[68px]' : 'w-[220px]'
+        } flex-shrink-0 transition-all duration-300 ease-in-out flex flex-col`}
+        style={{
+          background: '#FFFFFF',
+          borderRight: '1px solid #E5E4E3',
+        }}
       >
-        {/* Logo */}
-        <div className="p-salex-lg border-b border-salex-gray-border flex items-center justify-between">
-          {sidebarOpen && <h1 className="text-salex-xl font-salex-bold text-salex-green">SALEX</h1>}
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-salex-sm hover:bg-salex-black-lighter rounded-salex-md transition-colors"
-          >
-            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
-
-        {/* Menu Items */}
-        <nav className="flex-1 p-salex-md space-y-salex-sm">
-          {menuItems.map((item) => (
-            <a
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-salex-md px-salex-md py-salex-md rounded-salex-md transition-colors ${
-                isActive(item.href)
-                  ? 'bg-salex-green/10 text-salex-green'
-                  : 'text-salex-secondary hover:bg-salex-black-lighter hover:text-salex-green'
-              }`}
+        {/* Logo zone */}
+        <div
+          className={`flex items-center h-[60px] px-4 border-b`}
+          style={{ borderColor: '#E5E4E3' }}
+        >
+          {collapsed ? (
+            <button
+              onClick={() => setCollapsed(false)}
+              className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-gray-50 transition-colors mx-auto"
+              title="Expand sidebar"
             >
-              <item.icon size={20} />
-              {sidebarOpen && <span className="text-salex-sm font-salex-medium">{item.label}</span>}
-            </a>
-          ))}
-        </nav>
-
-        {/* User Info */}
-        <div className="p-salex-md border-t border-salex-gray-border space-y-salex-md">
-          {sidebarOpen && (
-            <div className="px-salex-md py-salex-sm bg-salex-black-lighter rounded-salex-md">
-              <p className="text-salex-xs text-salex-secondary">Logged in as</p>
-              <p className="text-salex-sm font-salex-bold text-salex-white truncate">{user?.email}</p>
-              <p className="text-salex-xs text-salex-green">{user?.role}</p>
+              <img src={logoImg} alt="Salex" className="w-7 h-7 object-contain" />
+            </button>
+          ) : (
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-2.5">
+                <img src={logoImg} alt="Salex" className="w-7 h-7 object-contain" />
+                <span
+                  className="font-sans font-bold tracking-tight text-base"
+                  style={{ color: '#03031F' }}
+                >
+                  SALEX
+                </span>
+                <span
+                  className="font-mono text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded"
+                  style={{ background: '#F5F3F1', color: '#6F6D7A' }}
+                >
+                  Admin
+                </span>
+              </div>
+              <button
+                onClick={() => setCollapsed(true)}
+                className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-gray-50 transition-colors"
+                style={{ color: '#A8A6B0' }}
+              >
+                <X size={14} />
+              </button>
             </div>
           )}
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto">
+          {/* Section label */}
+          {!collapsed && (
+            <p
+              className="section-label px-3 pb-2"
+              style={{ color: '#C9C7CF' }}
+            >
+              Navigation
+            </p>
+          )}
+
+          {NAV_ITEMS.map((item) => {
+            const active = isActive(item.href);
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigate(item.href);
+                }}
+                title={collapsed ? item.label : undefined}
+                className={`nav-item flex items-center gap-3 px-3 py-2.5 rounded-salex-md transition-all duration-150 ${
+                  active ? 'active' : ''
+                }`}
+                style={{
+                  background: active ? '#F5F3F1' : 'transparent',
+                  color: active ? '#03031F' : '#6F6D7A',
+                  fontWeight: active ? 600 : 400,
+                  textDecoration: 'none',
+                }}
+              >
+                <item.icon
+                  size={16}
+                  className="flex-shrink-0"
+                  style={{ color: active ? '#03031F' : '#A8A6B0' }}
+                />
+                {!collapsed && (
+                  <span className="text-salex-sm font-sans truncate">{item.label}</span>
+                )}
+              </a>
+            );
+          })}
+        </nav>
+
+        {/* User / Logout */}
+        <div
+          className="px-2 py-4 border-t space-y-1"
+          style={{ borderColor: '#E5E4E3' }}
+        >
+          {!collapsed && user && (
+            <div className="px-3 py-2.5 rounded-salex-md mb-1" style={{ background: '#F5F3F1' }}>
+              <p
+                className="font-mono text-[9px] uppercase tracking-widest"
+                style={{ color: '#A8A6B0' }}
+              >
+                Logged in as
+              </p>
+              <p
+                className="text-salex-sm font-semibold truncate mt-0.5"
+                style={{ color: '#03031F' }}
+              >
+                {user?.name || user?.email}
+              </p>
+              <p
+                className="font-mono text-[9px] uppercase tracking-wide mt-0.5"
+                style={{ color: '#12A36D' }}
+              >
+                {user?.role}
+              </p>
+            </div>
+          )}
+
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-salex-md px-salex-md py-salex-md rounded-salex-md hover:bg-salex-red hover:bg-opacity-20 transition-colors text-salex-secondary hover:text-salex-red"
+            title={collapsed ? 'Logout' : undefined}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-salex-md transition-colors hover:bg-red-50 group"
           >
-            <LogOut size={20} />
-            {sidebarOpen && <span className="text-salex-sm font-salex-medium">Logout</span>}
+            <LogOut size={16} className="flex-shrink-0 group-hover:text-red-500 transition-colors" style={{ color: '#A8A6B0' }} />
+            {!collapsed && (
+              <span className="text-salex-sm font-sans group-hover:text-red-500 transition-colors" style={{ color: '#6F6D7A' }}>
+                Sign out
+              </span>
+            )}
           </button>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-auto">
-        {/* Header */}
-        <header className="bg-salex-black-light border-b border-salex-gray-border px-salex-xl py-salex-lg sticky top-0 z-10">
-          <div className="flex items-center justify-between">
-            <h2 className="text-salex-2xl font-salex-bold text-salex-white">Admin Dashboard</h2>
-            <div className="flex items-center gap-salex-lg">
-              <div className="text-right">
-                <p className="text-salex-sm text-salex-secondary">Welcome back</p>
-                <p className="text-salex-base font-salex-bold text-salex-white">{user?.name}</p>
+      {/* ── Main area ─────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Top header bar */}
+        <header
+          className="flex-shrink-0 flex items-center justify-between h-[60px] px-6"
+          style={{
+            background: '#FFFFFF',
+            borderBottom: '1px solid #E5E4E3',
+          }}
+        >
+          {/* Page title */}
+          <div className="flex items-center gap-2" style={{ color: '#A8A6B0' }}>
+            <span className="text-salex-xs font-mono uppercase tracking-widest">Admin</span>
+            <ChevronRight size={12} />
+            <span
+              className="text-salex-sm font-semibold"
+              style={{ color: '#03031F' }}
+            >
+              {pageTitle}
+            </span>
+          </div>
+
+          {/* Right side */}
+          <div className="flex items-center gap-3">
+            {/* Notification bell */}
+            <button
+              className="w-9 h-9 flex items-center justify-center rounded-salex-md hover:bg-gray-50 transition-colors relative"
+              style={{ color: '#A8A6B0' }}
+            >
+              <Bell size={16} />
+            </button>
+
+            {/* Avatar / user chip */}
+            <div
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-salex-lg"
+              style={{ background: '#F5F3F1' }}
+            >
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold"
+                style={{ background: '#03031F', color: '#FFFFFF' }}
+              >
+                {(user?.name || user?.email || 'A')[0].toUpperCase()}
               </div>
+              <span className="text-salex-sm font-medium hidden sm:block" style={{ color: '#03031F' }}>
+                {user?.name || 'Admin'}
+              </span>
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
-        <div className="p-salex-xl">{children}</div>
-      </main>
+        {/* Scrollable page content */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-6 max-w-[1400px] mx-auto animate-fade-in">
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   );
 };

@@ -1,5 +1,5 @@
 export { Button } from './Button';
-export { Card, CardHeader, CardBody, CardFooter } from './Card';
+export { Card, CardHeader, CardBody, CardFooter, StatCard } from './Card';
 export { Input, Select, TextArea } from './Input';
 export { Table } from './Table';
 export { Badge } from './Badge';

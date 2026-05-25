@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardHeader, CardBody, Badge, Button, Alert } from '@/components';
 import { apiClient } from '@/services/apiClient';
+import { RefreshCw } from 'lucide-react';
 
 interface ServiceHealth {
   name: string;
@@ -26,50 +27,31 @@ interface PlatformStats {
   weeklyBookings: number;
 }
 
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'healthy':
-      return <span className="text-salex-green text-lg">✓</span>;
-    case 'degraded':
-      return <span className="text-yellow-500 text-lg">⚠</span>;
-    case 'down':
-      return <span className="text-red-500 text-lg">✗</span>;
-    default:
-      return <span className="text-salex-secondary text-lg">?</span>;
-  }
+const STATUS_COLORS = {
+  healthy:  { dot: '#12A36D', badge: 'success' as const, label: 'Healthy'  },
+  degraded: { dot: '#9C7A4A', badge: 'warning' as const, label: 'Degraded' },
+  down:     { dot: '#C62020', badge: 'error'   as const, label: 'Down'     },
+  unknown:  { dot: '#A8A6B0', badge: 'muted'   as const, label: 'Unknown'  },
 };
 
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'healthy':
-      return <Badge label="Healthy" variant="success" />;
-    case 'degraded':
-      return <Badge label="Degraded" variant="warning" />;
-    case 'down':
-      return <Badge label="Down" variant="error" />;
-    default:
-      return <Badge label="Unknown" variant="info" />;
-  }
-};
-
-const getServiceIcon = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower.includes('database') || lower.includes('postgres')) return <span className="text-salex-secondary text-lg">🗄️</span>;
-  if (lower.includes('whatsapp')) return <span className="text-salex-secondary text-lg">💬</span>;
-  if (lower.includes('supabase') || lower.includes('cloud')) return <span className="text-salex-secondary text-lg">☁️</span>;
-  return <span className="text-salex-secondary text-lg">🖥️</span>;
+const StatusDot = ({ status }: { status: string }) => {
+  const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS]?.dot ?? '#A8A6B0';
+  return (
+    <span
+      className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+      style={{ background: color }}
+    />
+  );
 };
 
 export const SystemHealthPage: React.FC = () => {
-  const [health, setHealth] = useState<SystemHealth | null>(null);
-  const [stats, setStats] = useState<PlatformStats | null>(null);
+  const [health, setHealth]   = useState<SystemHealth | null>(null);
+  const [stats, setStats]     = useState<PlatformStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-  useEffect(() => {
-    fetchHealthData();
-  }, []);
+  useEffect(() => { fetchHealthData(); }, []);
 
   const fetchHealthData = async () => {
     setIsLoading(true);
@@ -79,16 +61,13 @@ export const SystemHealthPage: React.FC = () => {
         apiClient.getSystemHealth(),
         apiClient.getPlatformStats(),
       ]);
-      
-      // Transform API response structure to match frontend expectations
+
       const healthData = healthRes.data;
       if (healthData) {
-        // Convert services object to array format
         const servicesArray: ServiceHealth[] = [];
         if (healthData.services) {
           Object.entries(healthData.services).forEach(([key, serviceData]: [string, any]) => {
             if (Array.isArray(serviceData)) {
-              // Handle array of services
               serviceData.forEach((service: any) => {
                 servicesArray.push({
                   name: service.service || key,
@@ -99,7 +78,6 @@ export const SystemHealthPage: React.FC = () => {
                 });
               });
             } else {
-              // Handle single service object
               servicesArray.push({
                 name: serviceData.service || key,
                 status: serviceData.status || 'unknown',
@@ -110,7 +88,6 @@ export const SystemHealthPage: React.FC = () => {
             }
           });
         }
-
         setHealth({
           overall: healthData.overall?.status || 'unknown',
           services: servicesArray,
@@ -118,20 +95,19 @@ export const SystemHealthPage: React.FC = () => {
           version: healthData.version,
         });
       }
-      
-      // Transform stats response - extract platform stats from nested structure
+
       const statsData = statsRes.data;
       if (statsData) {
         setStats({
-          totalBusinesses: statsData.businesses?.total || 0,
+          totalBusinesses:  statsData.businesses?.total  || 0,
           activeBusinesses: statsData.businesses?.active || 0,
-          totalBookings: statsData.bookings?.total || 0,
-          todayBookings: statsData.bookings?.recent || 0,
-          weeklyBookings: statsData.bookings?.weekly || 0,
-          totalRevenue: statsData.revenue?.total?.amount || 0,
+          totalBookings:    statsData.bookings?.total    || 0,
+          todayBookings:    statsData.bookings?.recent   || 0,
+          weeklyBookings:   statsData.bookings?.weekly   || 0,
+          totalRevenue:     statsData.revenue?.total?.amount || 0,
         });
       }
-      
+
       setLastRefresh(new Date());
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to fetch health data');
@@ -142,159 +118,145 @@ export const SystemHealthPage: React.FC = () => {
 
   const formatUptime = (seconds?: number) => {
     if (!seconds) return 'N/A';
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    return `${days}d ${hours}h ${mins}m`;
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${d}d ${h}h ${m}m`;
   };
 
-  const formatCurrency = (amount: number) => `₹${(amount || 0).toLocaleString('en-IN')}`;
+  const fmt = (n: number) => `₹${(n || 0).toLocaleString('en-IN')}`;
 
   if (isLoading && !health) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin">
-          <span className="text-salex-green text-2xl">⟳</span>
-        </div>
+        <div className="spinner" style={{ width: 28, height: 28 }} />
       </div>
     );
   }
 
+  const overallInfo = STATUS_COLORS[health?.overall as keyof typeof STATUS_COLORS] ?? STATUS_COLORS.unknown;
+
   return (
-    <div className="space-y-salex-lg">
+    <div className="space-y-5">
       {error && <Alert type="error" title="Error" message={error} onClose={() => setError(null)} />}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-salex-2xl font-salex-bold text-salex-white">System Health</h1>
-          <p className="text-salex-sm text-salex-secondary">
+          <p className="font-mono text-[10px] uppercase tracking-widest mb-1" style={{ color: '#A8A6B0' }}>
+            System
+          </p>
+          <h1 className="font-serif text-[28px] leading-tight" style={{ color: '#03031F', fontWeight: 400 }}>
+            System Health
+          </h1>
+          <p className="text-[12px] mt-0.5" style={{ color: '#A8A6B0' }}>
             Last checked: {lastRefresh.toLocaleTimeString('en-IN')}
           </p>
         </div>
-        <Button variant="secondary" onClick={fetchHealthData} isLoading={isLoading}>
-          <span className={`mr-2 ${isLoading ? 'animate-spin' : ''}`}>⟳</span>
+        <Button
+          variant="secondary"
+          onClick={fetchHealthData}
+          isLoading={isLoading}
+          leftIcon={<RefreshCw size={14} />}
+        >
           Refresh
         </Button>
       </div>
 
-      {/* Overall Status */}
+      {/* Overall status banner */}
       {health && (
-        <Card>
-          <CardBody>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-salex-md">
-                {getStatusIcon(health.overall)}
-                <div>
-                  <p className="text-salex-lg font-salex-bold text-salex-white">System Status</p>
-                  <p className="text-salex-sm text-salex-secondary">All services operational status</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-salex-lg">
-                {getStatusBadge(health.overall)}
-                {health.version && (
-                  <Badge label={`v${health.version}`} variant="info" />
-                )}
-              </div>
+        <div
+          className="flex items-center justify-between p-5 rounded-salex-lg border"
+          style={{
+            background: '#FFFFFF',
+            borderColor: '#E5E4E3',
+            boxShadow: '0 1px 3px rgba(3,3,31,0.05)',
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <StatusDot status={health.overall} />
+            <div>
+              <p className="font-semibold text-[15px]" style={{ color: '#03031F' }}>System Status</p>
+              <p className="text-[12px]" style={{ color: '#6F6D7A' }}>All services operational status</p>
             </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge label={overallInfo.label} variant={overallInfo.badge === 'muted' ? 'default' : overallInfo.badge} dot />
+            {health.version && <Badge label={`v${health.version}`} variant="default" />}
             {health.uptime && (
-              <div className="mt-salex-md pt-salex-md border-t border-salex-gray-border">
-                <p className="text-salex-sm text-salex-secondary">
-                  Uptime: <span className="text-salex-white font-salex-medium">{formatUptime(health.uptime)}</span>
-                </p>
-              </div>
+              <span className="font-mono text-[11px]" style={{ color: '#6F6D7A' }}>
+                Uptime: <strong style={{ color: '#03031F' }}>{formatUptime(health.uptime)}</strong>
+              </span>
             )}
-          </CardBody>
-        </Card>
-      )}
-
-      {/* Platform Stats */}
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-salex-md">
-          <Card>
-            <CardBody>
-              <p className="text-salex-xs text-salex-secondary">Total Businesses</p>
-              <p className="text-salex-xl font-salex-bold text-salex-white">{stats.totalBusinesses || 0}</p>
-            </CardBody>
-          </Card>
-          <Card>
-            <CardBody>
-              <p className="text-salex-xs text-salex-secondary">Active Businesses</p>
-              <p className="text-salex-xl font-salex-bold text-salex-green">{stats.activeBusinesses || 0}</p>
-            </CardBody>
-          </Card>
-          <Card>
-            <CardBody>
-              <p className="text-salex-xs text-salex-secondary">Total Bookings</p>
-              <p className="text-salex-xl font-salex-bold text-salex-white">{stats.totalBookings || 0}</p>
-            </CardBody>
-          </Card>
-          <Card>
-            <CardBody>
-              <p className="text-salex-xs text-salex-secondary">Today's Bookings</p>
-              <p className="text-salex-xl font-salex-bold text-salex-white">{stats.todayBookings || 0}</p>
-            </CardBody>
-          </Card>
-          <Card>
-            <CardBody>
-              <p className="text-salex-xs text-salex-secondary">Weekly Bookings</p>
-              <p className="text-salex-xl font-salex-bold text-salex-white">{stats.weeklyBookings || 0}</p>
-            </CardBody>
-          </Card>
-          <Card>
-            <CardBody>
-              <p className="text-salex-xs text-salex-secondary">Total Revenue</p>
-              <p className="text-salex-xl font-salex-bold text-salex-green">{formatCurrency(stats.totalRevenue)}</p>
-            </CardBody>
-          </Card>
+          </div>
         </div>
       )}
 
-      {/* Service Health Grid */}
+      {/* Platform stats */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {[
+            { label: 'Total Businesses',  value: stats.totalBusinesses,  color: '#03031F' },
+            { label: 'Active Businesses', value: stats.activeBusinesses, color: '#12A36D' },
+            { label: 'Total Bookings',    value: stats.totalBookings,    color: '#03031F' },
+            { label: "Today's Bookings",  value: stats.todayBookings,    color: '#03031F' },
+            { label: 'Weekly Bookings',   value: stats.weeklyBookings,   color: '#03031F' },
+            { label: 'Total Revenue',     value: fmt(stats.totalRevenue), color: '#12A36D' },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="bg-white rounded-salex-lg border p-4"
+              style={{ borderColor: '#E5E4E3', boxShadow: '0 1px 3px rgba(3,3,31,0.05)' }}
+            >
+              <p className="font-mono text-[9px] uppercase tracking-widest" style={{ color: '#A8A6B0' }}>{s.label}</p>
+              <p className="mt-1.5 font-bold text-[20px] leading-none" style={{ color: s.color }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Service health grid */}
       {health?.services && health.services.length > 0 && (
         <Card>
-          <CardHeader title="Service Health" subtitle="Individual service status" />
+          <CardHeader title="Service Health" subtitle="Individual service status and latency" />
           <CardBody>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-salex-md">
-              {health.services.map((service, index) => (
-                <div
-                  key={index}
-                  className="p-salex-md bg-salex-black-light rounded-salex-md border border-salex-gray-border"
-                >
-                  <div className="flex items-center justify-between mb-salex-sm">
-                    <div className="flex items-center gap-salex-sm">
-                      <span className="text-salex-secondary">{getServiceIcon(service.name)}</span>
-                      <span className="text-salex-white font-salex-medium">{service.name}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {health.services.map((service, idx) => {
+                const si = STATUS_COLORS[service.status as keyof typeof STATUS_COLORS] ?? STATUS_COLORS.unknown;
+                return (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-salex-md border"
+                    style={{ background: '#FAFAF9', borderColor: '#E5E4E3' }}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <StatusDot status={service.status} />
+                        <span className="font-semibold text-[13px]" style={{ color: '#03031F' }}>{service.name}</span>
+                      </div>
+                      <Badge label={si.label} variant={si.badge === 'muted' ? 'default' : si.badge} size="sm" />
                     </div>
-                    {getStatusIcon(service.status)}
+                    <p className="font-mono text-[11px]" style={{ color: '#A8A6B0' }}>
+                      {service.latency ? `${service.latency}ms latency` : 'Latency N/A'}
+                    </p>
+                    {service.message && (
+                      <p className="mt-1 text-[11px]" style={{ color: '#6F6D7A' }}>{service.message}</p>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between text-salex-xs">
-                    <span className="text-salex-secondary">
-                      {service.latency ? `${service.latency}ms` : 'N/A'}
-                    </span>
-                    {getStatusBadge(service.status)}
-                  </div>
-                  {service.message && (
-                    <p className="text-salex-xs text-salex-secondary mt-salex-sm">{service.message}</p>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardBody>
         </Card>
       )}
 
-      {/* Quick Actions */}
+      {/* Quick actions */}
       <Card>
         <CardHeader title="Quick Actions" />
         <CardBody>
-          <div className="flex flex-wrap gap-salex-sm">
-            <Button variant="secondary" onClick={() => window.location.href = '/audit-logs'}>
-              View Audit Logs
-            </Button>
-            <Button variant="secondary" onClick={fetchHealthData}>
-              Force Health Check
-            </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button variant="secondary" onClick={() => window.location.href = '/audit-logs'}>View Audit Logs</Button>
+            <Button variant="secondary" onClick={fetchHealthData} leftIcon={<RefreshCw size={14} />}>Force Health Check</Button>
           </div>
         </CardBody>
       </Card>

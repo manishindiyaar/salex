@@ -4,7 +4,7 @@
  * Handles system health checks and platform statistics for admin dashboard.
  */
 
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { prisma } from '@salex/shared-types';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '../utils/logger';
@@ -40,8 +40,8 @@ class AdminHealthController {
         if (result.status === 'fulfilled') {
           return {
             service: services[index],
-            status: 'healthy',
             ...result.value,
+            status: result.value.status || 'healthy',
           };
         } else {
           return {
@@ -145,7 +145,7 @@ class AdminHealthController {
     const start = Date.now();
     
     // Check Supabase API connectivity
-    const { data, error } = await this.supabase
+    const { error } = await this.supabase
       .from('Business')
       .select('count')
       .limit(1);

@@ -1,33 +1,51 @@
 import React from 'react';
 
+// ── Badge ──────────────────────────────────────────────────────────────────
 interface BadgeProps {
   label: string;
-  variant?: 'success' | 'warning' | 'error' | 'info' | 'default';
+  variant?: 'success' | 'warning' | 'error' | 'info' | 'default' | 'muted';
   size?: 'sm' | 'md';
+  dot?: boolean;
   className?: string;
 }
+
+const BADGE_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
+  success: { bg: 'rgba(18, 163, 109, 0.12)', text: '#0E8558',   dot: '#12A36D' },
+  warning: { bg: 'rgba(156, 122, 74, 0.12)', text: '#7D5F2F',   dot: '#9C7A4A' },
+  error:   { bg: 'rgba(198, 32, 32, 0.12)',  text: '#C62020',   dot: '#C62020' },
+  info:    { bg: 'rgba(0, 136, 204, 0.12)',  text: '#0077B5',   dot: '#0088CC' },
+  default: { bg: '#F5F3F1',                  text: '#03031F',   dot: '#6F6D7A' },
+  muted:   { bg: '#F5F3F1',                  text: '#6F6D7A',   dot: '#A8A6B0' },
+};
 
 export const Badge: React.FC<BadgeProps> = ({
   label,
   variant = 'default',
-  size = 'md',
+  size = 'sm',
+  dot = false,
   className = '',
 }) => {
-  const variantStyles = {
-    success: 'bg-salex-green bg-opacity-20 text-salex-green border border-salex-green border-opacity-30',
-    warning: 'bg-salex-amber bg-opacity-20 text-salex-amber border border-salex-amber border-opacity-30',
-    error: 'bg-salex-red bg-opacity-20 text-salex-red border border-salex-red border-opacity-30',
-    info: 'bg-salex-blue bg-opacity-20 text-salex-blue border border-salex-blue border-opacity-30',
-    default: 'bg-salex-gray-variant text-salex-secondary border border-salex-gray-border',
-  };
+  const style = BADGE_STYLES[variant] ?? BADGE_STYLES.default;
 
-  const sizeStyles = {
-    sm: 'px-salex-sm py-salex-xs text-salex-xs font-salex-medium rounded-salex-sm',
-    md: 'px-salex-md py-salex-sm text-salex-sm font-salex-medium rounded-salex-md',
-  };
+  const sizeClass =
+    size === 'sm'
+      ? 'px-2 py-0.5 text-[10px]'
+      : 'px-2.5 py-1 text-[11px]';
 
   return (
-    <span className={`inline-block ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}>
+    <span
+      className={`badge-pill ${sizeClass} ${className}`}
+      style={{
+        background: style.bg,
+        color: style.text,
+      }}
+    >
+      {dot && (
+        <span
+          className="status-dot"
+          style={{ background: style.dot }}
+        />
+      )}
       {label}
     </span>
   );

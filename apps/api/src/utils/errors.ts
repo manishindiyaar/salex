@@ -4,7 +4,7 @@
  * Application-specific errors for consistent error handling.
  */
 
-import { ZodError } from 'zod';
+import { ZodError, type ZodIssue } from 'zod';
 
 export class AppError extends Error {
   constructor(
@@ -51,13 +51,22 @@ export class ForbiddenError extends AppError {
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string, zodErrorOrDetails?: ZodError | Record<string, string[]>) {
+  constructor(message: string, zodErrorOrDetails?: ZodError | ZodIssue[] | Record<string, string[]>) {
     let details: Record<string, string[]> | undefined;
     
     if (zodErrorOrDetails instanceof ZodError) {
       // Convert ZodError to details format
       details = {};
       for (const issue of zodErrorOrDetails.issues) {
+        const path = issue.path.join('.') || 'root';
+        if (!details[path]) {
+          details[path] = [];
+        }
+        details[path].push(issue.message);
+      }
+    } else if (Array.isArray(zodErrorOrDetails)) {
+      details = {};
+      for (const issue of zodErrorOrDetails) {
         const path = issue.path.join('.') || 'root';
         if (!details[path]) {
           details[path] = [];

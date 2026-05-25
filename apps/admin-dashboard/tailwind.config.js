@@ -8,74 +8,121 @@ export default {
     extend: {
       colors: {
         'salex': {
-          'black': '#000000',
-          'black-light': '#0A0A0A',
-          'black-lighter': '#141414',
-          'green': '#00FF00',
-          'green-dark': '#00CC00',
-          'blue': '#00AAFF',
-          'amber': '#FFB800',
-          'red': '#FF3333',
-          'gray': '#888888',
-          'gray-dark': '#555555',
-          'gray-darker': '#444444',
-          'gray-border': '#333333',
-          'gray-variant': '#1A1A1A',
-          'white': '#FFFFFF',
+          // ── Backgrounds ──────────────────────────────
+          'black':           '#FCFCFA',   // Warm paper – main background
+          'black-light':     '#FFFFFF',   // Pure white – cards / sidebar
+          'black-lighter':   '#F5F3F1',   // Hovered / selected surface
+          'black-lightest':  '#EEEDEC',   // Pressed surface
+
+          // ── Brand ────────────────────────────────────
+          'green':           '#12A36D',   // Premium calm success green
+          'green-dark':      '#0E8558',   // Pressed green
+          'green-light':     'rgba(18, 163, 109, 0.12)', // Tint bg
+
+          // ── Semantic ──────────────────────────────────
+          'blue':            '#0088CC',   // Info blue
+          'blue-light':      'rgba(0, 136, 204, 0.12)',
+          'amber':           '#9C7A4A',   // Antique gold warning
+          'amber-light':     'rgba(156, 122, 74, 0.12)',
+          'red':             '#C62020',   // Crimson error
+          'red-light':       'rgba(198, 32, 32, 0.12)',
+
+          // ── Neutrals ──────────────────────────────────
+          'gray':            '#6F6D7A',   // Secondary text
+          'gray-dark':       '#A8A6B0',   // Muted text / placeholders
+          'gray-darker':     '#C9C7CF',   // Disabled / borders
+          'gray-border':     '#C9C7CF',   // Default border
+          'gray-variant':    '#F5F3F1',   // Surface variant
+
+          // ── Text (semantic) ───────────────────────────
+          'white':           '#03031F',   // Primary text (deep ink)
+          'secondary':       '#6F6D7A',   // Secondary text
         },
       },
-      backgroundColor: {
-        'salex-primary': '#000000',
-        'salex-secondary': '#0A0A0A',
-        'salex-tertiary': '#141414',
+
+      fontFamily: {
+        serif:  ['"Instrument Serif"', 'serif'],
+        sans:   ['Inter', 'sans-serif'],
+        mono:   ['"Space Mono"', 'monospace'],
       },
-      textColor: {
-        'salex-primary': '#FFFFFF',
-        'salex-secondary': '#888888',
-        'salex-tertiary': '#555555',
-      },
+
       fontSize: {
-        'salex-xs': '12px',
-        'salex-sm': '14px',
-        'salex-base': '16px',
-        'salex-lg': '20px',
-        'salex-xl': '28px',
-        'salex-2xl': '34px',
-        'salex-calc-sm': '32px',
-        'salex-calc-md': '48px',
-        'salex-calc-lg': '64px',
+        'salex-xs':   ['11px', { lineHeight: '16px', letterSpacing: '0.01em' }],
+        'salex-sm':   ['13px', { lineHeight: '18px' }],
+        'salex-base': ['15px', { lineHeight: '22px' }],
+        'salex-lg':   ['18px', { lineHeight: '26px' }],
+        'salex-xl':   ['24px', { lineHeight: '32px' }],
+        'salex-2xl':  ['30px', { lineHeight: '38px', letterSpacing: '-0.02em' }],
+        'salex-3xl':  ['38px', { lineHeight: '46px', letterSpacing: '-0.03em' }],
       },
+
       fontWeight: {
-        'salex-normal': 400,
-        'salex-medium': 600,
-        'salex-bold': 700,
-        'salex-calc': 900,
+        'salex-normal': '400',
+        'salex-medium': '500',
+        'salex-semibold': '600',
+        'salex-bold':   '700',
       },
+
       borderRadius: {
-        'salex-sm': '6px',
+        'salex-xs': '6px',
+        'salex-sm': '8px',
         'salex-md': '10px',
         'salex-lg': '14px',
         'salex-xl': '20px',
+        'salex-pill': '999px',
       },
+
       spacing: {
-        'salex-xs': '4px',
-        'salex-sm': '8px',
-        'salex-md': '12px',
-        'salex-lg': '16px',
-        'salex-xl': '24px',
+        'salex-xs':  '4px',
+        'salex-sm':  '8px',
+        'salex-md':  '12px',
+        'salex-lg':  '16px',
+        'salex-xl':  '24px',
         'salex-xxl': '32px',
+        'salex-3xl': '48px',
       },
+
       boxShadow: {
-        'salex-sm': '0 0 0 1px rgba(0, 255, 0, 0.1)',
-        'salex-md': '0 2px 4px rgba(0, 255, 0, 0.1)',
-        'salex-lg': '0 4px 8px rgba(0, 255, 0, 0.15)',
-        'salex-xl': '0 8px 16px rgba(0, 255, 0, 0.2)',
+        'salex-xs':  '0 1px 2px rgba(3, 3, 31, 0.05)',
+        'salex-sm':  '0 1px 4px rgba(3, 3, 31, 0.07)',
+        'salex-md':  '0 2px 8px rgba(3, 3, 31, 0.08)',
+        'salex-lg':  '0 4px 16px rgba(3, 3, 31, 0.10)',
+        'salex-xl':  '0 8px 32px rgba(3, 3, 31, 0.12)',
+        'salex-modal': '0 20px 60px rgba(3, 3, 31, 0.18)',
+        'salex-focus': '0 0 0 3px rgba(3, 3, 31, 0.10)',
       },
+
       minHeight: {
         'touch': '44px',
       },
       minWidth: {
         'touch': '44px',
+      },
+
+      transitionDuration: {
+        'fast': '150ms',
+        'normal': '250ms',
+      },
+
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'translateY(6px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        scaleIn: {
+          '0%': { opacity: '0', transform: 'scale(0.96)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        slideInLeft: {
+          '0%': { opacity: '0', transform: 'translateX(-8px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+      },
+
+      animation: {
+        'fade-in':      'fadeIn 0.25s ease forwards',
+        'scale-in':     'scaleIn 0.2s ease forwards',
+        'slide-in':     'slideInLeft 0.3s ease forwards',
       },
     },
   },

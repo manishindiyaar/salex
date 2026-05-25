@@ -31,6 +31,9 @@ class ApiClient {
           const isAuthCheck = error.config?.url?.includes('/auth/me');
           if (!isAuthCheck) {
             this.clearToken();
+            import('../store/authStore').then(({ useAuthStore }) => {
+              useAuthStore.setState({ user: null, isAuthenticated: false });
+            }).catch(() => {});
             if (window.location.pathname !== '/login') {
               window.location.href = '/login';
             }
@@ -90,19 +93,12 @@ class ApiClient {
     return response.data;
   }
 
-  async toggleBusinessStatus(id: string) {
-    const response = await this.client.post(`/admin/businesses/${id}/toggle`);
+  async toggleBusinessStatus(id: string, reason: string) {
+    const response = await this.client.post(`/admin/businesses/${id}/toggle`, { reason });
     return response.data;
   }
 
   async changeSubscriptionPlan(id: string, plan: string, reason: string) {
-    console.log('=== DEBUG: Frontend API Call ===');
-    console.log('ID:', id);
-    console.log('Plan:', plan);
-    console.log('Reason:', reason);
-    console.log('Payload:', { plan, reason });
-    console.log('================================');
-    
     const response = await this.client.patch(`/admin/businesses/${id}/plan`, { plan, reason });
     return response.data;
   }
@@ -112,13 +108,28 @@ class ApiClient {
     return response.data;
   }
 
-  async getBusinessModules(id: string) {
-    const response = await this.client.get(`/admin/businesses/${id}/modules`);
+  async getBookingDiagnostics(id: string) {
+    const response = await this.client.get(`/admin/businesses/${id}/diagnostics/bookings`);
     return response.data;
   }
 
-  async updateBusinessModules(id: string, modules: Record<string, boolean>) {
-    const response = await this.client.patch(`/admin/businesses/${id}/modules`, { modules });
+  async getWhatsAppAudit(id: string) {
+    const response = await this.client.get(`/admin/businesses/${id}/diagnostics/whatsapp`);
+    return response.data;
+  }
+
+  async getSupportNotes(id: string) {
+    const response = await this.client.get(`/admin/businesses/${id}/support-notes`);
+    return response.data;
+  }
+
+  async createSupportNote(id: string, body: string, status = 'OPEN') {
+    const response = await this.client.post(`/admin/businesses/${id}/support-notes`, { body, status });
+    return response.data;
+  }
+
+  async updateSupportNoteStatus(id: string, noteId: string, status: string) {
+    const response = await this.client.patch(`/admin/businesses/${id}/support-notes/${noteId}`, { status });
     return response.data;
   }
 
@@ -137,8 +148,8 @@ class ApiClient {
       amount,
       paymentMethod,
       transactionRef,
-      periodStart,
-      periodEnd,
+      periodStart: periodStart ? new Date(periodStart).toISOString() : undefined,
+      periodEnd: periodEnd ? new Date(periodEnd).toISOString() : undefined,
       notes,
     });
     return response.data;
@@ -161,31 +172,7 @@ class ApiClient {
     return response.data;
   }
 
-  // Template endpoints
-  async listTemplates(params?: { page?: number; limit?: number }) {
-    const response = await this.client.get('/admin/templates', { params });
-    return response.data;
-  }
 
-  async getTemplate(id: string) {
-    const response = await this.client.get(`/admin/templates/${id}`);
-    return response.data;
-  }
-
-  async createTemplate(data: any) {
-    const response = await this.client.post('/admin/templates', data);
-    return response.data;
-  }
-
-  async updateTemplate(id: string, data: any) {
-    const response = await this.client.patch(`/admin/templates/${id}`, data);
-    return response.data;
-  }
-
-  async deleteTemplate(id: string) {
-    const response = await this.client.delete(`/admin/templates/${id}`);
-    return response.data;
-  }
 
   // Health endpoints
   async getSystemHealth() {
@@ -204,6 +191,7 @@ class ApiClient {
     limit?: number;
     action?: string;
     entityType?: string;
+    entityId?: string;
     adminId?: string;
     startDate?: string;
     endDate?: string;

@@ -51,6 +51,7 @@ class BookingService {
     const { 
       businessId, 
       customerId, 
+      businessCustomerId,
       serviceIds, 
       scheduledAt, 
       notes, 
@@ -154,73 +155,105 @@ class BookingService {
       }
     }
 
-    // Create booking with items and allocation in a transaction
-    const booking = await prisma.$transaction(async (tx) => {
-      // Create the booking with allocation
-      const newBooking = await tx.booking.create({
-        data: {
-          businessId,
-          customerId: customerId || null,
-          resourceId: assignment.resourceId,
-          staffId: assignment.staffId,
-          status: 'PENDING',
-          scheduledAt: scheduledAtDate,
-          endAt,
-          totalPrice,
-          notes: notes || null,
-          source: source || 'manual',
+    let bookingResult;
+    try {
+      bookingResult = await autoAssignmentService.allocateAndExecute(
+        businessId,
+        scheduledAtDate,
+        endAt,
+        {
+          preferredResourceId: resourceId || assignment.resourceId,
+          preferredStaffId: staffId || assignment.staffId,
+          customerPreferredStaffId: preferredStaffId,
         },
-        include: {
-          resource: { select: { id: true, name: true } },
-          staff: { select: { id: true, name: true } },
-        },
-      });
+        async (tx, allocatedResourceId, allocatedStaffId) => {
+          // Create the booking with allocation
+          const newBooking = await tx.booking.create({
+            data: {
+              businessId,
+              customerId: customerId || null,
+              businessCustomerId: businessCustomerId || null,
+              resourceId: allocatedResourceId,
+              staffId: allocatedStaffId,
+              status: 'PENDING',
+              scheduledAt: scheduledAtDate,
+              endAt,
+              totalPrice,
+              notes: notes || null,
+              source: source || 'manual',
+            },
+            include: {
+              resource: { select: { id: true, name: true } },
+              staff: { select: { id: true, name: true } },
+            },
+          });
 
-      // Create booking items with price snapshots
-      const bookingItems = await Promise.all(
-        services.map(service =>
-          tx.bookingItem.create({
+          // Create booking items with price snapshots
+          const bookingItems = await Promise.all(
+            services.map(service =>
+              tx.bookingItem.create({
+                data: {
+                  bookingId: newBooking.id,
+                  serviceId: service.id,
+                  nameSnapshot: service.name,
+                  priceSnapshot: service.price,
+                },
+              })
+            )
+          );
+
+          // Create status history
+          await tx.bookingStatusHistory.create({
             data: {
               bookingId: newBooking.id,
-              serviceId: service.id,
-              nameSnapshot: service.name,
-              priceSnapshot: service.price,
-            },
-          })
-        )
+              businessId,
+              toStatus: 'PENDING',
+              changedByType: 'MERCHANT',
+            }
+          });
+
+          return {
+            ...newBooking,
+            items: bookingItems,
+          };
+        }
       );
 
-      return {
-        ...newBooking,
-        items: bookingItems,
-      };
-    });
-
-    // Allocate with lock to prevent race conditions
-    await autoAssignmentService.allocateWithLock(
-      businessId,
-      booking.id,
-      scheduledAtDate,
-      endAt,
-      {
-        preferredResourceId: resourceId || assignment.resourceId,
-        preferredStaffId: staffId || assignment.staffId,
-        customerPreferredStaffId: preferredStaffId,
-      }
-    );
+      // Record successful attempt
+      await prisma.bookingAttempt.create({
+        data: {
+          businessId,
+          channel: source === 'whatsapp' ? 'WHATSAPP' : 'MERCHANT_APP',
+          stage: 'CREATION',
+          status: 'SUCCEEDED',
+        }
+      });
+    } catch (error: any) {
+      // Record failed attempt
+      await prisma.bookingAttempt.create({
+        data: {
+          businessId,
+          channel: source === 'whatsapp' ? 'WHATSAPP' : 'MERCHANT_APP',
+          stage: 'CREATION',
+          status: 'FAILED',
+          failureMessage: error.message || 'Unknown error',
+        }
+      });
+      throw error;
+    }
 
     logger.info({
-      bookingId: booking.id,
+      bookingId: bookingResult.id,
       businessId,
       serviceCount: services.length,
       totalPrice,
       scheduledAt: scheduledAtDate,
       endAt,
-      resourceId: assignment.resourceId,
-      staffId: assignment.staffId,
+      resourceId: bookingResult.resourceId,
+      staffId: bookingResult.staffId,
     }, 'Booking created with allocation');
 
-    return booking as BookingWithItems;
+    return bookingResult as BookingWithItems;
   }
 
   /**
@@ -451,21 +484,35 @@ class BookingService {
       );
     }
 
-    const updated = await prisma.booking.update({
-      where: { id },
-      data: { status: newStatus },
-      include: {
-        items: true,
-        customer: {
-          select: { name: true, phoneNumber: true },
+    const updated = await prisma.$transaction(async (tx) => {
+      const b = await tx.booking.update({
+        where: { id },
+        data: { status: newStatus },
+        include: {
+          items: true,
+          customer: {
+            select: { name: true, phoneNumber: true },
+          },
+          resource: {
+            select: { id: true, name: true },
+          },
+          staff: {
+            select: { id: true, name: true },
+          },
         },
-        resource: {
-          select: { id: true, name: true },
-        },
-        staff: {
-          select: { id: true, name: true },
-        },
-      },
+      });
+
+      await tx.bookingStatusHistory.create({
+        data: {
+          bookingId: id,
+          businessId: booking.businessId,
+          fromStatus: currentStatus,
+          toStatus: newStatus,
+          changedByType: 'MERCHANT',
+        }
+      });
+
+      return b;
     });
 
     logger.info({
@@ -592,6 +639,16 @@ class BookingService {
             select: { id: true, name: true },
           },
         },
+      });
+
+      await tx.bookingStatusHistory.create({
+        data: {
+          bookingId: id,
+          businessId: booking.businessId,
+          fromStatus: booking.status,
+          toStatus: 'COMPLETED',
+          changedByType: 'MERCHANT',
+        }
       });
 
       return updatedBooking;

@@ -5,7 +5,7 @@ interface AdminUser {
   id: string;
   email: string;
   name: string;
-  role: 'SUPPORT' | 'ADMIN' | 'SUPER_ADMIN';
+  role: 'ADMIN' | 'SUPER_ADMIN';
   createdAt: string;
 }
 
@@ -51,13 +51,15 @@ export const useAuthStore = create<AuthStore>((set) => ({
     set({ isLoading: true });
     try {
       await apiClient.logout();
+    } catch (error) {
+      // Proceed with local cleanup even if API fails
+    } finally {
+      apiClient.clearToken();
       set({
         user: null,
         isAuthenticated: false,
         isLoading: false,
       });
-    } catch (error) {
-      set({ isLoading: false });
     }
   },
 

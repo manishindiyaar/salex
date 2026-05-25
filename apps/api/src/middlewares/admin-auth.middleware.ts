@@ -7,7 +7,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { prisma, AdminUser, AdminRole } from '@salex/shared-types';
+import { prisma, AdminRole } from '@salex/shared-types';
 import { getConfig, isDevelopment } from '../config';
 import { UnauthorizedError, ForbiddenError } from '../utils/errors';
 import { logger } from '../utils/logger';
@@ -59,7 +59,7 @@ const DEV_MOCK_ADMIN: AdminContext = {
  * In development with ENABLE_AUTH=false, bypasses auth and uses mock admin
  */
 export function adminAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
-  return asyncHandler(async (req, _res, next) => {
+  return asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     const config = getConfig();
     
     // Development auth bypass
@@ -135,9 +135,8 @@ export function adminAuthMiddleware(req: Request, _res: Response, next: NextFunc
  */
 export function requireAdminRole(requiredRole: AdminRole) {
   const roleHierarchy: Record<AdminRole, number> = {
-    SUPPORT: 1,
-    ADMIN: 2,
-    SUPER_ADMIN: 3,
+    ADMIN: 1,
+    SUPER_ADMIN: 2,
   };
 
   return (req: Request, _res: Response, next: NextFunction) => {
@@ -163,7 +162,9 @@ export function requireAdminRole(requiredRole: AdminRole) {
 /**
  * Async handler wrapper to catch async errors
  */
-function asyncHandler(fn: Function) {
+type AsyncMiddleware = (req: Request, res: Response, next: NextFunction) => Promise<void>;
+
+function asyncHandler(fn: AsyncMiddleware) {
   return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };

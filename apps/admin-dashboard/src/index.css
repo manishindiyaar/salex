@@ -1,7 +1,13 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   SALEX ADMIN — Premium Editorial Design System
+   Design: Warm Paper × Deep Ink × Instrument Serif Headlines
+   ============================================================ */
 * {
   margin: 0;
   padding: 0;
@@ -14,73 +20,287 @@ html, body, #root {
 }
 
 body {
-  background-color: #000000;
-  color: #FFFFFF;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  background-color: #FCFCFA;
+  color: #03031F;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
-/* Scrollbar styling */
+/* ============================================================
+   SCROLLBAR — Minimal editorial style
+   ============================================================ */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0A0A0A;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333333;
-  border-radius: 4px;
+  background: #C9C7CF;
+  border-radius: 99px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00FF00;
+  background: #03031F;
 }
 
-/* Focus styles */
+/* ============================================================
+   FOCUS — Ink-style focus rings
+   ============================================================ */
 :focus-visible {
-  outline: 2px solid #00FF00;
+  outline: 2px solid #03031F;
   outline-offset: 2px;
+  border-radius: 4px;
 }
 
-/* Input styling */
+/* ============================================================
+   FORM ELEMENTS — Clean editorial inputs
+   ============================================================ */
 input, textarea, select {
-  background-color: #0A0A0A;
-  color: #FFFFFF;
-  border: 1px solid #333333;
-  border-radius: 6px;
-  padding: 8px 12px;
+  background-color: #FFFFFF;
+  color: #03031F;
+  border: 1.5px solid #C9C7CF;
+  border-radius: 10px;
+  padding: 10px 14px;
   font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 input:focus, textarea:focus, select:focus {
-  border-color: #00FF00;
+  border-color: #03031F;
   outline: none;
+  box-shadow: 0 0 0 3px rgba(3, 3, 31, 0.08);
 }
 
-input::placeholder {
-  color: #555555;
+input::placeholder, textarea::placeholder {
+  color: #A8A6B0;
 }
 
-/* Button reset */
+input:disabled, textarea:disabled, select:disabled {
+  background-color: #F5F3F1;
+  color: #A8A6B0;
+  cursor: not-allowed;
+}
+
+/* Select arrow */
+select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236F6D7A' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+/* ============================================================
+   BUTTON RESET
+   ============================================================ */
 button {
   cursor: pointer;
   border: none;
   background: none;
-  font-family: inherit;
+  font-family: 'Inter', sans-serif;
 }
 
-/* Link styling */
+/* ============================================================
+   LINKS
+   ============================================================ */
 a {
-  color: #00FF00;
+  color: #12A36D;
   text-decoration: none;
+  transition: color 0.15s ease;
 }
 
 a:hover {
-  color: #00CC00;
+  color: #0E8558;
+}
+
+/* ============================================================
+   TYPOGRAPHY UTILITIES
+   ============================================================ */
+.font-serif {
+  font-family: 'Instrument Serif', serif !important;
+}
+
+.font-mono {
+  font-family: 'Space Mono', monospace !important;
+}
+
+.font-sans {
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* ============================================================
+   ANIMATIONS — Micro-interaction library
+   ============================================================ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease forwards;
+}
+
+.animate-slide-in {
+  animation: slideInRight 0.3s ease forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease forwards;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 1.8s ease-in-out infinite;
+}
+
+/* Staggered children */
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 60ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 120ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 180ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 240ms; }
+
+/* ============================================================
+   TABLE — Editorial styling
+   ============================================================ */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6F6D7A;
+  font-weight: 700;
+}
+
+/* ============================================================
+   CARD HOVER GLOW — Ultra-subtle
+   ============================================================ */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(3, 3, 31, 0.07);
+}
+
+/* ============================================================
+   SIDEBAR NAV ITEM — Premium active indicator
+   ============================================================ */
+.nav-item {
+  position: relative;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: #03031F;
+  border-radius: 0 3px 3px 0;
+}
+
+/* ============================================================
+   STAT CARD NUMBER — Bold editorial metric display
+   ============================================================ */
+.metric-number {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  color: #03031F;
+  line-height: 1.1;
+}
+
+/* ============================================================
+   BADGE PILL
+   ============================================================ */
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 99px;
+}
+
+/* ============================================================
+   MODAL BACKDROP
+   ============================================================ */
+.modal-backdrop {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* ============================================================
+   SPINNER — Deep ink brand color
+   ============================================================ */
+.spinner {
+  border: 2px solid rgba(3, 3, 31, 0.1);
+  border-top-color: #03031F;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   SECTION DIVIDER
+   ============================================================ */
+.section-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #A8A6B0;
+}
+
+/* ============================================================
+   STATUS DOT
+   ============================================================ */
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
 }

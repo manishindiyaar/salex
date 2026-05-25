@@ -22,7 +22,6 @@ async function migrateExistingBusinesses() {
 
   let subscriptionsCreated = 0;
   let categoriesUpdated = 0;
-  let modulesCreated = 0;
 
   for (const business of businesses) {
     try {
@@ -55,32 +54,6 @@ async function migrateExistingBusinesses() {
         console.log(`  ✅ Set category to SALON for: ${business.name}`);
       }
 
-      // 3. Create default module configs if missing
-      const existingModules = await prisma.businessModuleConfig.findMany({
-        where: { businessId: business.id },
-      });
-
-      if (existingModules.length === 0) {
-        // Create default modules for BASIC plan
-        const defaultModules = [
-          'walk_in_queue',
-          'resource_management',
-          'staff_management',
-        ];
-
-        for (const moduleCode of defaultModules) {
-          await prisma.businessModuleConfig.create({
-            data: {
-              businessId: business.id,
-              moduleCode,
-              isEnabled: true,
-            },
-          });
-          modulesCreated++;
-        }
-        console.log(`  ✅ Created ${defaultModules.length} module configs for: ${business.name}`);
-      }
-
     } catch (error) {
       console.error(`  ❌ Failed to migrate: ${business.name}`, error);
     }
@@ -89,7 +62,6 @@ async function migrateExistingBusinesses() {
   console.log('\n📊 Migration Summary:');
   console.log(`  - Subscriptions created: ${subscriptionsCreated}`);
   console.log(`  - Categories updated: ${categoriesUpdated}`);
-  console.log(`  - Module configs created: ${modulesCreated}`);
   console.log('\n✨ Migration complete!');
 }
 

@@ -1,10 +1,12 @@
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   children: React.ReactNode;
+  leftIcon?: React.ReactNode;
+  rightIcon?: React.ReactNode;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -14,36 +16,47 @@ export const Button: React.FC<ButtonProps> = ({
   disabled,
   children,
   className = '',
+  leftIcon,
+  rightIcon,
   ...props
 }) => {
-  const baseStyles = 'font-salex-bold rounded-salex-md transition-colors duration-200 flex items-center justify-center gap-2';
+  const base =
+    'inline-flex items-center justify-center gap-2 font-sans font-semibold rounded-salex-md transition-all duration-150 select-none whitespace-nowrap';
 
-  const variantStyles = {
-    primary: 'bg-salex-green text-salex-black hover:bg-salex-green-dark disabled:bg-salex-gray-darker',
-    secondary: 'bg-salex-gray-variant text-salex-white border border-salex-gray-border hover:bg-salex-black-lighter disabled:bg-salex-gray-darker',
-    danger: 'bg-salex-red text-salex-white hover:bg-salex-red disabled:bg-salex-gray-darker',
-    ghost: 'text-salex-green hover:bg-salex-gray-variant disabled:text-salex-gray-darker',
+  const variants: Record<string, string> = {
+    primary:
+      'bg-[#03031F] text-white hover:bg-[#1a1a3a] active:scale-[0.98] disabled:bg-[#C9C7CF] disabled:cursor-not-allowed',
+    secondary:
+      'bg-white text-[#03031F] border border-[#C9C7CF] hover:border-[#03031F] hover:bg-[#F5F3F1] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed',
+    danger:
+      'bg-[#C62020] text-white hover:bg-[#a81a1a] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed',
+    ghost:
+      'bg-transparent text-[#6F6D7A] hover:bg-[#F5F3F1] hover:text-[#03031F] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed',
+    outline:
+      'bg-transparent text-[#12A36D] border border-[#12A36D] hover:bg-[rgba(18,163,109,0.08)] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed',
   };
 
-  const sizeStyles = {
-    sm: 'px-salex-md py-salex-sm text-salex-sm min-h-touch',
-    md: 'px-salex-lg py-salex-md text-salex-base min-h-touch',
-    lg: 'px-salex-xl py-salex-lg text-salex-lg min-h-touch',
+  const sizes: Record<string, string> = {
+    xs: 'px-2.5 py-1.5 text-[11px] min-h-[32px]',
+    sm: 'px-3 py-2 text-[13px] min-h-[36px]',
+    md: 'px-4 py-2.5 text-[14px] min-h-[40px]',
+    lg: 'px-6 py-3 text-[15px] min-h-[48px]',
   };
 
   return (
     <button
       disabled={disabled || isLoading}
-      className={`${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
+      className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     >
-      {isLoading && (
-        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-      )}
+      {isLoading ? (
+        <span
+          className="spinner"
+          style={{ width: 14, height: 14 }}
+        />
+      ) : leftIcon}
       {children}
+      {!isLoading && rightIcon}
     </button>
   );
 };

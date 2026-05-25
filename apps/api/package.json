@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "pnpm --filter @salex/shared-types build && tsc",
     "start": "node dist/server.js",
     "clean": "rm -rf dist",
     "lint": "eslint src --ext .ts",

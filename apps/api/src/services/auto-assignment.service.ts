@@ -152,10 +152,6 @@ class AutoAssignmentService {
     };
   }
 
-  /**
-   * Allocate resource and staff to a booking with transaction lock
-   * Uses Serializable isolation to prevent race conditions
-   */
   async allocateWithLock(
     businessId: string,
     bookingId: string,
@@ -163,6 +159,38 @@ class AutoAssignmentService {
     endAt: Date,
     preferences?: AssignmentPreferences
   ): Promise<AllocationResult> {
+    return this.allocateAndExecute(
+      businessId,
+      scheduledAt,
+      endAt,
+      preferences,
+      async (tx, resourceId, staffId) => {
+        await tx.booking.update({
+          where: { id: bookingId },
+          data: { resourceId, staffId },
+        });
+        return { bookingId };
+      }
+    ).then(res => ({
+      success: true,
+      bookingId: res.bookingId,
+      resourceId: res.resourceId,
+      resourceName: res.resourceName,
+      staffId: res.staffId,
+      staffName: res.staffName,
+    }));
+  }
+
+  /**
+   * Allocate resource and staff, and execute a callback within the same serializable transaction
+   */
+  async allocateAndExecute<T>(
+    businessId: string,
+    scheduledAt: Date,
+    endAt: Date,
+    preferences: AssignmentPreferences | undefined,
+    callback: (tx: Prisma.TransactionClient, resourceId: string, staffId: string) => Promise<T>
+  ): Promise<T & { resourceId: string; resourceName: string; staffId: string; staffName: string }> {
     try {
       const result = await prisma.$transaction(async (tx) => {
         // Re-check availability within transaction
@@ -171,7 +199,6 @@ class AutoAssignmentService {
           where: {
             businessId,
             resourceId: { not: null },
-            id: { not: bookingId },
             status: { in: ['PENDING', 'CONFIRMED'] },
             AND: [
               { scheduledAt: { lt: endAt } },
@@ -187,7 +214,6 @@ class AutoAssignmentService {
           where: {
             businessId,
             staffId: { not: null },
-            id: { not: bookingId },
             status: { in: ['PENDING', 'CONFIRMED'] },
             AND: [
               { scheduledAt: { lt: endAt } },
@@ -283,18 +309,11 @@ class AutoAssignmentService {
           }
         }
 
-        // Update the booking with allocation
-        await tx.booking.update({
-          where: { id: bookingId },
-          data: {
-            resourceId: selectedResource.id,
-            staffId: selectedStaff.id,
-          },
-        });
+        // Execute callback
+        const callbackResult = await callback(tx, selectedResource.id, selectedStaff.id);
 
         return {
-          success: true,
-          bookingId,
+          ...callbackResult,
           resourceId: selectedResource.id,
           resourceName: selectedResource.name,
           staffId: selectedStaff.id,
@@ -306,7 +325,6 @@ class AutoAssignmentService {
       });
 
       logger.info({
-        bookingId,
         resourceId: result.resourceId,
         staffId: result.staffId,
       }, 'Booking allocated');
@@ -322,7 +340,7 @@ class AutoAssignmentService {
         throw new ConflictError('Slot was just booked by another request. Please try again.');
       }
 
-      logger.error({ error, bookingId }, 'Allocation failed');
+      logger.error({ error }, 'Allocation failed');
       throw error;
     }
   }

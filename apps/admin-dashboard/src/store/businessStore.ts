@@ -32,7 +32,7 @@ interface BusinessStore {
 
   fetchBusinesses: (params?: any) => Promise<void>;
   fetchBusinessDetails: (id: string) => Promise<void>;
-  toggleBusinessStatus: (id: string) => Promise<void>;
+  toggleBusinessStatus: (id: string, reason: string) => Promise<void>;
   changeSubscriptionPlan: (id: string, plan: string, reason: string) => Promise<void>;
   setPagination: (page: number, limit: number) => void;
   clearError: () => void;
@@ -88,10 +88,10 @@ export const useBusinessStore = create<BusinessStore>((set) => ({
     }
   },
 
-  toggleBusinessStatus: async (id: string) => {
+  toggleBusinessStatus: async (id: string, reason: string) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await apiClient.toggleBusinessStatus(id);
+      const response = await apiClient.toggleBusinessStatus(id, reason);
       // API returns { success, data: { business, message } }
       set((state) => ({
         businesses: state.businesses.map((b) =>
@@ -104,10 +104,12 @@ export const useBusinessStore = create<BusinessStore>((set) => ({
         isLoading: false,
       }));
     } catch (error: any) {
+      const errMsg = error.response?.data?.message || 'Failed to toggle business status';
       set({
-        error: error.response?.data?.message || 'Failed to toggle business status',
+        error: errMsg,
         isLoading: false,
       });
+      throw error;
     }
   },
 
@@ -148,6 +150,7 @@ export const useBusinessStore = create<BusinessStore>((set) => ({
         error: errorMessage,
         isLoading: false,
       });
+      throw error;
     }
   },
 

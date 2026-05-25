@@ -13,6 +13,14 @@ import routes from './routes';
 import { errorMiddleware } from './middlewares';
 import { isDevelopment } from './config';
 
+declare global {
+  namespace Express {
+    interface Request {
+      rawBody?: Buffer;
+    }
+  }
+}
+
 export function createApp(): Express {
   const app = express();
 
@@ -65,7 +73,15 @@ export function createApp(): Express {
   });
 
   // Body parsing
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({
+    limit: '10mb',
+    verify: (req, _res, buf) => {
+      const request = req as any;
+      if (request.originalUrl.includes('/webhooks/whatsapp')) {
+        request.rawBody = Buffer.from(buf);
+      }
+    },
+  }));
   app.use(express.urlencoded({ extended: true }));
 
   // Routes

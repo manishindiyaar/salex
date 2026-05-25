@@ -6,7 +6,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 
-type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<any>;
+type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
 
 /**
  * Wraps an async function to catch errors and pass them to next()

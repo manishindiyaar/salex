@@ -25,6 +25,7 @@ export type PaymentModeType = z.infer<typeof paymentModeSchema>;
 export const createBookingSchema = z.object({
   businessId: z.string().cuid(),
   customerId: z.string().cuid().optional().nullable(), // Optional for walk-ins
+  businessCustomerId: z.string().cuid().optional().nullable(),
   serviceIds: z.array(z.string().cuid()).min(1).max(10),
   scheduledAt: z.string().datetime(),
   notes: z.string().max(500).optional(),

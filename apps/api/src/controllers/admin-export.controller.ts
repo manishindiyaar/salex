@@ -7,7 +7,7 @@
  * - Custom field selection and filtering
  */
 
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '@salex/shared-types';
 import { logger } from '../utils/logger';

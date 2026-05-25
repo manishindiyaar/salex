@@ -9,7 +9,6 @@ export { bookingService } from './booking.service';
 export { businessService } from './business.service';
 export { conversationService } from './conversation.service';
 export { featureAccessService } from './feature-access.service';
-export { nicheTemplateService } from './niche-template.service';
 export { otpService } from './otp.service';
 export { routingService } from './routing.service';
 export { serviceService } from './service.service';

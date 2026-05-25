@@ -27,7 +27,6 @@ import { bookingService } from './booking.service';
 import { businessService } from './business.service';
 import { routingService } from './routing.service';
 import { featureAccessService } from './feature-access.service';
-import { nicheTemplateService } from './niche-template.service';
 
 // 24 hours in milliseconds
 const CONVERSATION_TIMEOUT_MS = 24 * 60 * 60 * 1000;
@@ -97,6 +96,50 @@ class ConversationService {
 
     logger.debug({ phoneNumber: normalizedPhone, customerId: customer.id }, 'Customer ensured');
     return customer;
+  }
+
+  /**
+   * Ensure Foundation V2 identity records exist for this business/customer pair.
+   */
+  async ensureBusinessCustomer(
+    businessId: string,
+    phoneNumber: string,
+    name?: string
+  ) {
+    const normalizedPhone = this.normalizePhoneNumber(phoneNumber);
+
+    const person = await prisma.person.upsert({
+      where: { phoneNumber: normalizedPhone },
+      update: { updatedAt: new Date() },
+      create: { phoneNumber: normalizedPhone },
+    });
+
+    const businessCustomer = await prisma.businessCustomer.upsert({
+      where: {
+        businessId_personId: {
+          businessId,
+          personId: person.id,
+        },
+      },
+      update: {
+        displayName: name || undefined,
+        lastInteractedAt: new Date(),
+      },
+      create: {
+        businessId,
+        personId: person.id,
+        displayName: name || null,
+        lastInteractedAt: new Date(),
+      },
+    });
+
+    logger.debug({
+      businessId,
+      personId: person.id,
+      businessCustomerId: businessCustomer.id,
+    }, 'Business customer ensured');
+
+    return businessCustomer;
   }
 
   /**
@@ -338,13 +381,14 @@ class ConversationService {
   async processMessage(
     customerPhone: string,
     messageText: string,
-    interactiveReply?: { type: string; id: string; title: string }
+    interactiveReply?: { type: string; id: string; title: string },
+    businessId?: string
   ): Promise<ConversationResponse> {
     // Ensure customer exists
     await this.ensureCustomer(customerPhone);
 
-    // Get or create conversation (without business initially)
-    let conversation = await this.getOrCreateConversation(customerPhone);
+    // Get or create conversation (with business if provided)
+    let conversation = await this.getOrCreateConversation(customerPhone, businessId);
 
     // Handle based on current state
     const state = conversation.state as ConversationStateType;
@@ -388,32 +432,21 @@ class ConversationService {
   private async handleGreeting(
     conversation: ConversationWithRelations
   ): Promise<ConversationResponse> {
+    // If we already have a business associated (e.g. from dedicated number), skip routing
+    if (conversation.businessId) {
+      try {
+        const withState = await this.updateState(conversation.id, 'SERVICE_SELECTION');
+        return this.showServiceSelection(withState);
+      } catch (error) {
+        logger.error({ error, businessId: conversation.businessId }, 'Failed to load services for dedicated number');
+        // If it fails, fallback to standard greeting
+      }
+    }
+
     // Move to awaiting routing code
     const updated = await this.updateState(conversation.id, 'AWAITING_ROUTING_CODE');
 
-    // If we already have a business associated, use its template
-    let welcomeMessage = '👋 Welcome to Salex Booking!\n\nPlease enter the business code (e.g., S1234) to start booking.';
-    
-    if (conversation.businessId) {
-      try {
-        // Get business with category
-        const business = await prisma.business.findUnique({
-          where: { id: conversation.businessId },
-          select: { name: true, category: true },
-        });
-
-        if (business?.category) {
-          // Get message templates for this business category
-          const messageTemplates = await nicheTemplateService.getMessageTemplates(business.category);
-          
-          // Use template welcome message with business name substitution
-          welcomeMessage = messageTemplates.welcome.replace('{businessName}', business.name);
-        }
-      } catch (error) {
-        logger.warn({ businessId: conversation.businessId, error }, 'Failed to load template for greeting');
-        // Fall back to default message
-      }
-    }
+    const welcomeMessage = '👋 Welcome to Salex Booking!\n\nPlease enter the business code (e.g., S1234) to start booking.';
 
     return {
       conversationId: updated.id,
@@ -575,19 +608,8 @@ class ConversationService {
 
     const businessName = business?.name || 'the business';
     
-    // Get terminology for service naming
-    let serviceTerm = 'service';
-    let servicePluralTerm = 'services';
-    
-    if (business?.category) {
-      try {
-        const terminology = await nicheTemplateService.getTerminology(business.category);
-        serviceTerm = terminology.service || 'service';
-        servicePluralTerm = terminology.servicePlural || 'services';
-      } catch (error) {
-        logger.warn({ businessId: conversation.businessId, category: business.category }, 'Failed to load terminology');
-      }
-    }
+    const serviceTerm = this.getServiceTerm(business?.category);
+    const servicePluralTerm = this.getServicePluralTerm(business?.category);
 
     // Create list message with services
     const rows: InteractiveListRow[] = services.map(service => ({
@@ -820,13 +842,17 @@ class ConversationService {
           throw new NotFoundError('Business not found');
         }
 
-        // Ensure customer exists and get ID
-        const customer = await this.ensureCustomer(conversation.customerPhone);
+        // Keep legacy Customer populated while Foundation V2 BusinessCustomer becomes the durable identity.
+        const [customer, businessCustomer] = await Promise.all([
+          this.ensureCustomer(conversation.customerPhone),
+          this.ensureBusinessCustomer(conversation.businessId!, conversation.customerPhone),
+        ]);
 
         // Create booking (auto-assigns resource and staff)
         const booking = await bookingService.create(business.ownerId, {
           businessId: conversation.businessId!,
           customerId: customer.id,
+          businessCustomerId: businessCustomer.id,
           serviceIds: context.selectedServiceIds || [],
           scheduledAt: context.requestedTime || new Date().toISOString(),
           source: 'whatsapp',
@@ -842,48 +868,10 @@ class ConversationService {
             })
           : 'your selected time';
 
-        // Build confirmation message with template customization
         const resourceInfo = booking.resource?.name ? `\n💺 ${booking.resource.name}` : '';
         const staffInfo = booking.staff?.name ? `\n👤 ${booking.staff.name}` : '';
         
-        let confirmationMessage = `Your booking at ${business.name} is confirmed!\n\n📅 ${formattedTime}${resourceInfo}${staffInfo}\n🆔 Booking ID: ${booking.id.slice(-8).toUpperCase()}\n\nSee you soon! 👋`;
-        
-        // Try to use template confirmation message
-        try {
-          const businessWithCategory = await prisma.business.findUnique({
-            where: { id: conversation.businessId! },
-            select: { category: true },
-          });
-
-          if (businessWithCategory?.category) {
-            const messageTemplates = await nicheTemplateService.getMessageTemplates(businessWithCategory.category);
-            
-            // Get service name for template
-            const serviceNames = context.selectedServiceIds?.length 
-              ? (await prisma.service.findMany({
-                  where: { id: { in: context.selectedServiceIds } },
-                  select: { name: true },
-                })).map(s => s.name).join(', ')
-              : 'Selected service';
-
-            // Use template confirmation message with substitutions
-            if (messageTemplates.bookingConfirmation) {
-              confirmationMessage = messageTemplates.bookingConfirmation
-                .replace('{businessName}', business.name)
-                .replace('{date}', formattedTime.split(',')[0] || formattedTime)
-                .replace('{time}', formattedTime.split(',')[1]?.trim() || formattedTime)
-                .replace('{service}', serviceNames)
-                .replace('{staff}', booking.staff?.name || 'Available staff');
-                
-              // Add booking ID and resource info
-              confirmationMessage += `\n\n🆔 Booking ID: ${booking.id.slice(-8).toUpperCase()}`;
-              if (resourceInfo) confirmationMessage += resourceInfo;
-            }
-          }
-        } catch (error) {
-          logger.warn({ businessId: conversation.businessId, error }, 'Failed to load template for confirmation');
-          // Fall back to default message
-        }
+        const confirmationMessage = `Your booking at ${business.name} is confirmed!\n\n📅 ${formattedTime}${resourceInfo}${staffInfo}\n🆔 Booking ID: ${booking.id.slice(-8).toUpperCase()}\n\nSee you soon! 👋`;
 
         return {
           conversationId: updated.id,
@@ -945,6 +933,16 @@ class ConversationService {
     }
     
     return normalized;
+  }
+
+  private getServiceTerm(category?: string): string {
+    if (category === 'CLINIC') return 'appointment';
+    return 'service';
+  }
+
+  private getServicePluralTerm(category?: string): string {
+    if (category === 'CLINIC') return 'appointments';
+    return 'services';
   }
 
   /**

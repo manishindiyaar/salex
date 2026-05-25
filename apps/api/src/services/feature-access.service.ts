@@ -1,57 +1,43 @@
 /**
  * Feature Access Service
  * 
- * Handles plan-based feature access control and module enablement.
+ * Handles plan-based feature access control.
  * 
  * Key flows:
  * 1. Check business isActive status
  * 2. Check subscription status (TRIAL or ACTIVE)
  * 3. Check feature is included in plan
- * 4. Check module is enabled for business
- * 5. Return clear denial reason if access denied
+ * 4. Return clear denial reason if access denied
  */
 
 import { prisma, SubscriptionPlan } from '@salex/shared-types';
 import { logger } from '../utils/logger';
 
-// Plan feature matrix - defines which features are available for each plan
+// Plan feature matrix - defines which features are available for each plan.
+// For V1, plan-based gating is bypassed and all core salon features are mapped to all plans.
+const ALL_V1_FEATURES = [
+  'walk_in_booking',
+  'service_management',
+  'resource_management',
+  'staff_management',
+  'basic_analytics',
+  'advanced_analytics',
+  'whatsapp_booking',
+  'customer_history',
+  'automated_reminders',
+  'own_whatsapp_number',
+  'website_widget',
+  'custom_branding',
+  'api_access',
+];
+
 const PLAN_FEATURES: Record<SubscriptionPlan, string[]> = {
-  BASIC: [
-    'walk_in_booking',
-    'service_management',
-    'resource_management',
-    'staff_management',
-    'basic_analytics',
-  ],
-  PRO: [
-    'walk_in_booking',
-    'service_management',
-    'resource_management',
-    'staff_management',
-    'basic_analytics',
-    'whatsapp_booking',
-    'customer_history',
-    'automated_reminders',
-    'advanced_analytics',
-  ],
-  CUSTOM: [
-    'walk_in_booking',
-    'service_management',
-    'resource_management',
-    'staff_management',
-    'basic_analytics',
-    'whatsapp_booking',
-    'customer_history',
-    'automated_reminders',
-    'advanced_analytics',
-    'own_whatsapp_number',
-    'website_widget',
-    'custom_branding',
-    'api_access',
-  ],
+  BASIC: ALL_V1_FEATURES,
+  PRO: ALL_V1_FEATURES,
+  CUSTOM: ALL_V1_FEATURES,
 };
 
-// Plan upgrade suggestions for denied features
+// Plan upgrade suggestions for denied features (kept for type compatibility)
 const FEATURE_PLAN_REQUIREMENTS: Record<string, SubscriptionPlan> = {
   'whatsapp_booking': 'PRO',
   'customer_history': 'PRO',
@@ -77,17 +63,15 @@ class FeatureAccessService {
    * Checks in order:
    * 1. Business exists and is active
    * 2. Subscription exists and is active (TRIAL or ACTIVE)
-   * 3. Feature is included in subscription plan
-   * 4. Module is enabled for business (if feature requires module)
+   * 3. For own_whatsapp_number, verify WhatsAppChannel configuration mode is DEDICATED
    */
   async canAccessFeature(businessId: string, featureCode: string): Promise<FeatureAccessResult> {
     try {
-      // Get business with subscription and module configs
       const business = await prisma.business.findUnique({
         where: { id: businessId },
         include: {
           subscription: true,
-          moduleConfigs: true,
+          whatsAppChannel: true,
         },
       });
 
@@ -124,30 +108,24 @@ class FeatureAccessService {
         };
       }
 
-      // 3. Check if feature is included in plan
-      const planFeatures = PLAN_FEATURES[subscription.plan];
-      if (!planFeatures.includes(featureCode)) {
-        const suggestedPlan = FEATURE_PLAN_REQUIREMENTS[featureCode];
-        return {
-          allowed: false,
-          reason: `Feature not available in ${subscription.plan} plan`,
-          suggestedPlan,
-        };
-      }
-
-      // 4. Check module enablement (if feature maps to a module)
-      const moduleCode = this.getModuleForFeature(featureCode);
-      if (moduleCode) {
-        const moduleConfig = business.moduleConfigs.find(
-          config => config.moduleCode === moduleCode
-        );
-        
-        if (!moduleConfig || !moduleConfig.isEnabled) {
+      // Special check: own_whatsapp_number is controlled by WhatsAppChannel configuration mode, not by CUSTOM plan
+      if (featureCode === 'own_whatsapp_number') {
+        const hasDedicated = business.whatsAppChannel?.mode === 'DEDICATED';
+        if (!hasDedicated) {
           return {
             allowed: false,
-            reason: `${moduleCode} module is not enabled for this business`,
+            reason: 'Dedicated WhatsApp number configuration is required for this feature',
           };
         }
+      }
+
+      // 3. Verify feature is a recognized V1 feature
+      const planFeatures = PLAN_FEATURES[subscription.plan];
+      if (!planFeatures.includes(featureCode)) {
+        return {
+          allowed: false,
+          reason: `Feature code ${featureCode} is not recognized`,
+        };
       }
 
       logger.info({ businessId, featureCode, plan: subscription.plan }, 'Feature access granted');
@@ -166,8 +144,7 @@ class FeatureAccessService {
   }
 
   /**
-   * Get all features available to a business
-   * Based on subscription plan and module configurations
+   * Get all features available to a business based on subscription plan.
    */
   async getAvailableFeatures(businessId: string): Promise<string[]> {
     try {
@@ -175,7 +152,6 @@ class FeatureAccessService {
         where: { id: businessId },
         include: {
           subscription: true,
-          moduleConfigs: true,
         },
       });
 
@@ -188,22 +164,7 @@ class FeatureAccessService {
         return [];
       }
 
-      // Get features for the subscription plan
-      const planFeatures = PLAN_FEATURES[subscription.plan];
-      
-      // Filter features based on enabled modules
-      const enabledModules = business.moduleConfigs
-        .filter(config => config.isEnabled)
-        .map(config => config.moduleCode);
-
-      const availableFeatures = planFeatures.filter(feature => {
-        const moduleCode = this.getModuleForFeature(feature);
-        // If feature doesn't require a module, it's always available
-        // If it requires a module, check if module is enabled
-        return !moduleCode || enabledModules.includes(moduleCode);
-      });
-
-      return availableFeatures;
+      return PLAN_FEATURES[subscription.plan];
 
     } catch (error) {
       logger.error({ businessId, error }, 'Error getting available features');
@@ -251,30 +212,6 @@ class FeatureAccessService {
     return FEATURE_PLAN_REQUIREMENTS;
   }
 
-  /**
-   * Map feature codes to module codes
-   * Returns null if feature doesn't require a specific module
-   */
-  private getModuleForFeature(featureCode: string): string | null {
-    const featureModuleMap: Record<string, string | null> = {
-      'walk_in_booking': 'walk_in_queue',
-      'whatsapp_booking': 'appointment_booking',
-      'resource_management': 'resource_management',
-      'staff_management': 'staff_management',
-      'customer_history': 'appointment_booking',
-      'automated_reminders': 'appointment_booking',
-      // Features that don't require specific modules
-      'service_management': null,
-      'basic_analytics': null,
-      'advanced_analytics': null,
-      'own_whatsapp_number': null,
-      'website_widget': null,
-      'custom_branding': null,
-      'api_access': null,
-    };
-
-    return featureModuleMap[featureCode] || null;
-  }
 }
 
 export const featureAccessService = new FeatureAccessService();

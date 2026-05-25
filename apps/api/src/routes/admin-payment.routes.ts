@@ -27,20 +27,20 @@ router.post('/',
 /**
  * GET /v1/admin/payments
  * List all payments with pagination and filters
- * Requires: SUPPORT role or higher
+ * Requires: ADMIN role or higher
  */
 router.get('/', 
-  requireAdminRole('SUPPORT'),
+  requireAdminRole('ADMIN'),
   asyncHandler(adminPaymentController.listPayments.bind(adminPaymentController))
 );
 
 /**
  * GET /v1/admin/payments/analytics
  * Get payment analytics and revenue metrics
- * Requires: SUPPORT role or higher
+ * Requires: ADMIN role or higher
  */
 router.get('/analytics', 
-  requireAdminRole('SUPPORT'),
+  requireAdminRole('ADMIN'),
   asyncHandler(adminPaymentController.getPaymentAnalytics.bind(adminPaymentController))
 );
 
