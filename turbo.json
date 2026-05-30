@@ -20,6 +20,18 @@
     "clean": {
       "cache": false
     },
+    "db:migrate": {
+      "cache": false
+    },
+    "db:migrate:create": {
+      "cache": false
+    },
+    "db:migrate:deploy": {
+      "cache": false
+    },
+    "db:migrate:status": {
+      "cache": false
+    },
     "db:push": {
       "cache": false
     },

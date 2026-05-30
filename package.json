@@ -12,7 +12,12 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "clean": "turbo run clean",
-    "db:push": "turbo run db:push --filter=@salex/shared-types",
+    "db:migrate": "pnpm --filter @salex/shared-types db:migrate",
+    "db:migrate:create": "pnpm --filter @salex/shared-types db:migrate:create",
+    "db:migrate:deploy": "pnpm --filter @salex/shared-types db:migrate:deploy",
+    "db:migrate:status": "pnpm --filter @salex/shared-types db:migrate:status",
+    "db:check-migration": "sh scripts/check-prisma-migration.sh",
+    "db:push": "pnpm --filter @salex/shared-types db:push",
     "db:generate": "turbo run db:generate --filter=@salex/shared-types",
     "db:studio": "turbo run db:studio --filter=@salex/shared-types",
     "prepare": "husky install"

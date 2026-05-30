@@ -1,0 +1,153 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - staging
+      - main
+  push:
+    branches:
+      - develop
+      - staging
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.11.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check Prisma migration included
+        if: github.event_name == 'pull_request'
+        run: pnpm db:check-migration -- --ci "${{ github.base_ref }}"
+
+      - name: Validate Prisma schema
+        run: pnpm --filter @salex/shared-types exec prisma validate
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  migrate-non-production:
+    name: Migrate Shared Develop/Staging DB
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'push' && (github.ref_name == 'develop' || github.ref_name == 'staging')
+    environment: staging
+    env:
+      DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.11.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply committed Prisma migrations
+        run: pnpm db:migrate:deploy
+
+  migrate-production:
+    name: Migrate Production DB
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    environment: production
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.PRODUCTION_DIRECT_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.11.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply committed Prisma migrations
+        run: pnpm db:migrate:deploy
+
+  deploy-staging:
+    name: Deploy Staging API
+    runs-on: ubuntu-latest
+    needs: migrate-non-production
+    if: github.event_name == 'push' && github.ref_name == 'staging'
+    environment: staging
+    env:
+      DEPLOY_HOOK_URL: ${{ secrets.RAILWAY_STAGING_DEPLOY_HOOK_URL }}
+    steps:
+      - name: Trigger Railway staging deploy
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "RAILWAY_STAGING_DEPLOY_HOOK_URL is not set; skipping deploy hook."
+            exit 0
+          fi
+
+          curl -fsS -X POST "$DEPLOY_HOOK_URL"
+
+  deploy-production:
+    name: Deploy Production API
+    runs-on: ubuntu-latest
+    needs: migrate-production
+    if: github.event_name == 'push' && github.ref_name == 'main'
+    environment: production
+    env:
+      DEPLOY_HOOK_URL: ${{ secrets.RAILWAY_PRODUCTION_DEPLOY_HOOK_URL }}
+    steps:
+      - name: Trigger Railway production deploy
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "RAILWAY_PRODUCTION_DEPLOY_HOOK_URL is not set; skipping deploy hook."
+            exit 0
+          fi
+
+          curl -fsS -X POST "$DEPLOY_HOOK_URL"
