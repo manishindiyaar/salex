@@ -54,7 +54,7 @@ jobs:
         run: pnpm lint
 
       - name: Test
-        run: pnpm test
+        run: pnpm exec turbo run test -- --passWithNoTests
 
       - name: Build
         run: pnpm build
