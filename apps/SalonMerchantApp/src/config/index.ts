@@ -21,7 +21,7 @@ export const AUTH_CONFIG = {
 export const API_CONFIG = {
   BASE_URL: isDev 
     ? 'http://localhost:3001/api/v1'
-    : 'https://api.salex.app/api/v1',
+    : 'https://salex-api-staging-staging.up.railway.app/api/v1',
   
   TIMEOUT_MS: 10000,
   
