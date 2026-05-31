@@ -43,6 +43,7 @@ class BusinessController {
             hoursOfOperation: business.hoursOfOperation,
             maxConcurrentBookings: business.maxConcurrentBookings,
             isAcceptingOrders: business.isAcceptingOrders,
+            onboardingCompleted: business.onboardingCompleted,
             services: business.services,
             createdAt: business.createdAt,
           },
@@ -75,6 +76,7 @@ class BusinessController {
             maxConcurrentBookings: business.maxConcurrentBookings,
             isAcceptingOrders: business.isAcceptingOrders,
             isActive: business.isActive, // Include isActive field for deactivation enforcement
+            onboardingCompleted: business.onboardingCompleted,
             services: business.services,
             createdAt: business.createdAt,
             updatedAt: business.updatedAt,
@@ -114,6 +116,7 @@ class BusinessController {
             hoursOfOperation: business.hoursOfOperation,
             maxConcurrentBookings: business.maxConcurrentBookings,
             isAcceptingOrders: business.isAcceptingOrders,
+            onboardingCompleted: business.onboardingCompleted,
             services: business.services,
             updatedAt: business.updatedAt,
           },

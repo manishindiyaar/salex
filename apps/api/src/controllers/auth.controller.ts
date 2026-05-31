@@ -93,13 +93,17 @@ class AuthController {
       if (!req.auth) {
         res.status(401).json({
           success: false,
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'Authentication required',
-          },
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
         });
         return;
       }
+
+      // Fetch full user to include mustChangePassword
+      const { prisma } = await import('@salex/shared-types');
+      const user = await prisma.user.findUnique({
+        where: { id: req.auth.userId },
+        select: { id: true, phone: true, role: true, mustChangePassword: true, phoneVerifiedAt: true },
+      });
 
       res.status(200).json({
         success: true,
@@ -108,6 +112,8 @@ class AuthController {
             id: req.auth.userId,
             phone: req.auth.phone,
             role: req.auth.role,
+            mustChangePassword: user?.mustChangePassword ?? false,
+            phoneVerified: !!user?.phoneVerifiedAt,
           },
         },
       });

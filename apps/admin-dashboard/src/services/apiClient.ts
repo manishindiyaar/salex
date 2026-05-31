@@ -172,7 +172,11 @@ class ApiClient {
     return response.data;
   }
 
-
+  // Merchant provisioning
+  async provisionMerchant(payload: any) {
+    const response = await this.client.post('/admin/merchant-accounts', payload);
+    return response.data;
+  }
 
   // Health endpoints
   async getSystemHealth() {

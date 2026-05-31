@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
 } from 'react-native';
 import { BrandMark } from '../../components/premium/BrandMark';
 import { PremiumScreen } from '../../components/premium/PremiumScreen';
@@ -11,6 +10,10 @@ import { PremiumButton } from '../../components/premium/PremiumButton';
 import { FloatingLabelInput } from '../../components/premium/FloatingLabelInput';
 import { Colors, Spacing, Typography } from '../../theme/premium';
 import { authService } from '../../services/authService';
+import { getBusinessMe } from '../../services/businessService';
+import { useAuth } from '../../context/AuthContext';
+import { useAuthStore } from '../../store/authStore';
+import { useOnboardingStore } from '../../store/onboardingStore';
 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
@@ -18,27 +21,39 @@ import type { OnboardingStackParamList } from '../../navigation/OnboardingNaviga
 type PhoneAuthScreenProps = NativeStackScreenProps<OnboardingStackParamList, 'PhoneAuth'>;
 
 const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
+  const clearAuth = useAuthStore((state) => state.clearAuth);
+  const { completeOnboarding } = useAuth();
+  const { setUserPhone, updateBusinessDraft } = useOnboardingStore();
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Normalize and clean Indian phone number to E.164 (+91xxxxxxxxxx)
-  const getFullPhoneNumber = () => {
-    let cleaned = phone.replace(/[^\d]/g, '');
+  React.useEffect(() => {
+    clearAuth();
+  }, [clearAuth]);
+
+  const getLocalPhoneNumber = (value: string) => {
+    let cleaned = value.replace(/[^\d]/g, '');
     if (cleaned.startsWith('91') && cleaned.length > 10) {
       cleaned = cleaned.substring(2);
     } else if (cleaned.startsWith('0')) {
       cleaned = cleaned.substring(1);
     }
-    return `+91${cleaned}`;
+    return cleaned.slice(0, 10);
+  };
+
+  // Normalize and clean Indian phone number to E.164 (+91xxxxxxxxxx)
+  const getFullPhoneNumber = () => {
+    return `+91${getLocalPhoneNumber(phone)}`;
   };
 
   const validatePhone = (num: string) => {
-    const cleaned = num.replace(/[^\d]/g, '');
+    const cleaned = getLocalPhoneNumber(num);
     return cleaned.length === 10;
   };
 
-  async function handleSendOtp() {
+  async function handleLogin() {
     const normalizedPhone = getFullPhoneNumber();
     
     if (!validatePhone(phone)) {
@@ -46,30 +61,48 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
       return;
     }
 
+    if (!password.trim()) {
+      setError('Please enter your password');
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
     try {
-      const result = await authService.requestOtp(normalizedPhone);
+      const result = await authService.loginWithPassword(normalizedPhone, password);
       
-      if (result.success) {
-        if (__DEV__) {
-          console.log('💡 Dev mode: Use OTP "123456"');
+      if (result.success && result.user) {
+        if (result.user.mustChangePassword) {
+          navigation.replace('ChangePassword', { currentPassword: password });
+          return;
         }
-        // Navigate to separate OtpVerification Screen
-        navigation.navigate('OtpVerification', { phoneNumber: normalizedPhone });
+
+        const business = await getBusinessMe();
+        setUserPhone(business.phoneNumber);
+        updateBusinessDraft({
+          businessId: business.id,
+          name: business.name,
+          phone: business.phoneNumber,
+        });
+
+        if (business.onboardingCompleted === true) {
+          completeOnboarding();
+        } else {
+          navigation.replace('BusinessIdentity', { businessId: business.id });
+        }
       } else {
-        setError(result.message || 'Failed to send OTP. Please try again.');
+        setError(result.message || 'Login failed. Please check your credentials.');
       }
     } catch (err: any) {
-      console.error('OTP request error:', err);
+      console.error('Password login error:', err);
       setError('Connection failure. Check your internet connection.');
     } finally {
       setLoading(false);
     }
   }
 
-  const isButtonDisabled = !validatePhone(phone) || loading;
+  const isButtonDisabled = !validatePhone(phone) || !password.trim() || loading;
 
   return (
     <PremiumScreen showBackButton onBackPress={() => navigation.goBack()} scrollable>
@@ -85,7 +118,7 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
         </Text>
         
         <Text style={[styles.subtitle, Typography.body]}>
-          Enter your phone number to sign in or create your salon merchant account.
+          Enter your phone number and password.
         </Text>
 
         {/* Input box */}
@@ -95,7 +128,7 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
             prefix="+91 "
             value={phone}
             onChangeText={(text) => {
-              setPhone(text.replace(/[^\d]/g, '').slice(0, 10));
+              setPhone(getLocalPhoneNumber(text));
               setError(null);
             }}
             placeholder="98765 43210"
@@ -104,23 +137,29 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
             editable={!loading}
             error={error || undefined}
           />
+          <FloatingLabelInput
+            label="Password"
+            value={password}
+            onChangeText={(text) => {
+              setPassword(text);
+              setError(null);
+            }}
+            placeholder="Password"
+            secureTextEntry
+            autoCapitalize="none"
+            editable={!loading}
+          />
         </View>
 
         {/* Action Button */}
         <View style={styles.actionContainer}>
           <PremiumButton
-            title={loading ? 'SENDING...' : 'SEND OTP'}
+            title={loading ? 'SIGNING IN...' : 'SIGN IN'}
             variant="filled"
             disabled={isButtonDisabled}
             loading={loading}
-            onPress={handleSendOtp}
+            onPress={handleLogin}
           />
-          
-          {__DEV__ && (
-            <Text style={[styles.devHint, Typography.caption]}>
-              💡 Dev mode: Use magic OTP "123456"
-            </Text>
-          )}
         </View>
       </View>
     </PremiumScreen>
@@ -155,11 +194,6 @@ const styles = StyleSheet.create({
     width: '100%',
     marginTop: Spacing.xl,
     alignItems: 'center',
-  },
-  devHint: {
-    marginTop: Spacing.lg,
-    fontStyle: 'italic',
-    textAlign: 'center',
   },
 });
 

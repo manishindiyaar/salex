@@ -2,6 +2,8 @@ import type { InteractiveMessage } from './conversation.service';
 import { getConfig } from '../config';
 import { BusinessRuleError } from '../utils/errors';
 import { logger } from '../utils/logger';
+import { tokenCacheService } from './token-cache.service';
+import { whatsappChannelService } from './whatsapp-channel.service';
 
 export interface MetaSendMessageResponse {
   messaging_product: 'whatsapp';
@@ -109,12 +111,46 @@ class WhatsAppService {
   async sendMessage(
     to: string,
     message: InteractiveMessage,
-    options?: { phoneNumberId?: string }
+    options?: { phoneNumberId?: string; businessId?: string }
   ): Promise<MetaSendMessageResponse> {
     const config = getConfig();
-    const phoneNumberId = options?.phoneNumberId || config.whatsappPhoneNumberId;
+    let accessToken = config.whatsappAccessToken;
+    let phoneNumberId = options?.phoneNumberId || config.whatsappPhoneNumberId;
 
-    if (!config.whatsappAccessToken || !phoneNumberId) {
+    // Per-business dedicated channel credentials
+    if (options?.businessId) {
+      try {
+        // Check token cache first
+        const cached = tokenCacheService.get(options.businessId);
+        if (cached) {
+          accessToken = cached.accessToken;
+          phoneNumberId = cached.phoneNumberId;
+        } else {
+          // Cache miss — decrypt from DB
+          const creds = await whatsappChannelService.getCredentials(options.businessId);
+          if (creds) {
+            accessToken = creds.accessToken;
+            phoneNumberId = creds.phoneNumberId;
+            tokenCacheService.set(options.businessId, {
+              accessToken: creds.accessToken,
+              phoneNumberId: creds.phoneNumberId,
+            });
+          } else {
+            logger.warn(
+              { businessId: options.businessId },
+              'No dedicated channel credentials found; falling back to shared platform credentials'
+            );
+          }
+        }
+      } catch (err) {
+        logger.warn(
+          { businessId: options.businessId, error: err },
+          'Failed to resolve per-business credentials; falling back to shared platform credentials'
+        );
+      }
+    }
+
+    if (!accessToken || !phoneNumberId) {
       throw new BusinessRuleError('WhatsApp API is not configured');
     }
 
@@ -124,7 +160,7 @@ class WhatsAppService {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${config.whatsappAccessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),

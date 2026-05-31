@@ -1,11 +1,13 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useAuthStore } from '../store/authStore';
 
 // Import screens
 import WelcomeScreen from '../screens/WelcomeScreen';
 import PhoneAuthScreen from '../screens/auth/PhoneAuthScreen';
 import OtpVerificationScreen from '../screens/auth/OtpVerificationScreen';
 import TestOtpScreen from '../screens/auth/TestOtpScreen';
+import ChangePasswordScreen from '../screens/auth/ChangePasswordScreen';
 import BusinessIdentityScreen from '../screens/onboarding/BusinessIdentityScreen';
 import ContactLocationScreen from '../screens/onboarding/ContactLocationScreen';
 import ServicesPricingScreen from '../screens/onboarding/ServicesPricingScreen';
@@ -17,10 +19,11 @@ import ReviewCompleteScreen from '../screens/onboarding/ReviewCompleteScreen';
 // BusinessTypeScreen removed — category is always SALON in this build.
 // For Spa / Clinic builds, swap the clinicConfig.ts via Expo build profiles.
 
-type OnboardingStackParamList = {
+export type OnboardingStackParamList = {
   Welcome: undefined;
   PhoneAuth: undefined;
   OtpVerification: { phoneNumber: string };
+  ChangePassword: { currentPassword: string };
   TestOtp: undefined;
   BusinessIdentity: { businessId: string };
   ContactLocation: undefined;
@@ -34,9 +37,12 @@ type OnboardingStackParamList = {
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 
 const OnboardingNavigator: React.FC = () => {
+  const { isAuthenticated, user } = useAuthStore();
+  const initialRouteName = isAuthenticated && !user?.mustChangePassword ? 'BusinessIdentity' : 'Welcome';
+
   return (
     <Stack.Navigator
-      initialRouteName="Welcome"
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
@@ -47,8 +53,13 @@ const OnboardingNavigator: React.FC = () => {
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="PhoneAuth" component={PhoneAuthScreen} />
       <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       {/* OTP → directly to BusinessIdentity, no type selection needed */}
-      <Stack.Screen name="BusinessIdentity" component={BusinessIdentityScreen} />
+      <Stack.Screen
+        name="BusinessIdentity"
+        component={BusinessIdentityScreen}
+        initialParams={{ businessId: user?.id ?? '' }}
+      />
       <Stack.Screen name="ContactLocation" component={ContactLocationScreen} />
       <Stack.Screen name="ServicesPricing" component={ServicesPricingScreen} />
       <Stack.Screen name="ResourceSetup" component={ResourceSetupScreen} />

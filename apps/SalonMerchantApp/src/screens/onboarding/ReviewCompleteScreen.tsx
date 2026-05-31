@@ -15,6 +15,7 @@ import { Colors, Spacing, Typography, BorderRadius } from '../../theme/premium';
 import { useAuth } from '../../context/AuthContext';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { createBusinessService } from '../../services/serviceService';
+import { updateBusiness } from '../../services/businessService';
 import { PremiumBottomSheet } from '../../components/premium/PremiumBottomSheet';
 import { PremiumButton } from '../../components/premium/PremiumButton';
 
@@ -70,6 +71,8 @@ const ReviewCompleteScreen: React.FC<ReviewCompleteScreenProps> = ({ navigation 
           }
         }
       }
+
+      await updateBusiness(businessId, { onboardingCompleted: true });
       
       // Simulate QR code setup
       setTimeout(() => {

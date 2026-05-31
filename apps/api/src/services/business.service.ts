@@ -225,6 +225,7 @@ class BusinessService {
     if (data.hoursOfOperation !== undefined) updateData.hoursOfOperation = data.hoursOfOperation;
     if (data.maxConcurrentBookings !== undefined) updateData.maxConcurrentBookings = data.maxConcurrentBookings;
     if (data.isAcceptingOrders !== undefined) updateData.isAcceptingOrders = data.isAcceptingOrders;
+    if (data.onboardingCompleted !== undefined) updateData.onboardingCompleted = data.onboardingCompleted;
 
     const updated = await prisma.business.update({
       where: { id },

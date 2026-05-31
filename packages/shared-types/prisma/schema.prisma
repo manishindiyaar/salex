@@ -63,19 +63,76 @@ enum BusinessCategory {
   OTHER
 }
 
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum AuthMethodType {
+  PASSWORD
+  PHONE_OTP
+}
+
+enum AuthMethodStatus {
+  ENABLED
+  DISABLED
+  PENDING_VERIFICATION
+}
+
+enum PhoneVerificationSource {
+  ADMIN_ATTESTED
+  OTP_PROVIDER
+}
+
+enum FlowStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 // ============================================
 // CORE MODELS
 // ============================================
 
-/// Merchant/Salon owner authenticated via OTP
+/// Merchant/Salon owner
 model User {
-  id        String   @id @default(cuid())
-  phone     String   @unique
-  role      UserRole @default(OWNER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                      String                   @id @default(cuid())
+  phone                   String                   @unique
+  role                    UserRole                 @default(OWNER)
+  status                  UserStatus               @default(ACTIVE)
+  mustChangePassword      Boolean                  @default(false)
+  phoneVerifiedAt         DateTime?
+  phoneVerificationSource PhoneVerificationSource?
+  createdByAdminId        String?
+  lastLoginAt             DateTime?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
 
-  businesses Business[]
+  businesses  Business[]
+  authMethods AuthMethod[]
+
+  @@index([status])
+  @@index([createdByAdminId])
+}
+
+/// Authentication method for a user (password, OTP, etc.)
+model AuthMethod {
+  id         String           @id @default(cuid())
+  userId     String
+  type       AuthMethodType
+  identifier String
+  secretHash String?
+  status     AuthMethodStatus @default(ENABLED)
+  verifiedAt DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([type, identifier])
+  @@index([userId, type, status])
 }
 
 /// OTP storage for phone verification
@@ -118,6 +175,7 @@ model Business {
   isAcceptingOrders     Boolean          @default(true)
   isActive              Boolean          @default(true) // NEW - Admin toggle
   onboardingCompleted   Boolean          @default(false)
+  whatsappSettings      Json? // { "flowEngineEnabled": boolean, ... } — segmentation flag (Req 11.1)
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
 
@@ -134,6 +192,7 @@ model Business {
   bookingAttempts      BookingAttempt[]
   supportNotes         SupportNote[]
   whatsAppChannel      WhatsAppChannel?
+  whatsAppFlows        WhatsAppFlow[]
 
   @@index([routingCode])
   @@index([category])
@@ -347,20 +406,29 @@ model BookingItem {
 
 /// WhatsApp conversation state (stateless API pattern)
 model WhatsAppConversation {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   customerPhone String
   businessId    String?
-  state         String   @default("GREETING")
-  contextData   Json     @default("{}")
-  lastMessageAt DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  state         String    @default("GREETING")
+  contextData   Json      @default("{}")
+  version       Int       @default(0)
+  lockedAt      DateTime?
+  lockedBy      String?
+  lastMessageAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Version pinning (Req 5.2/5.3) — null => running DEFAULT_FLOW
+  flowId      String?
+  flowVersion Int?
 
   customer Customer?         @relation(fields: [customerPhone], references: [phoneNumber])
   business Business?         @relation(fields: [businessId], references: [id])
   messages WhatsAppMessage[]
 
   @@unique([customerPhone, businessId])
+  @@index([customerPhone])
+  @@index([businessId])
 }
 
 /// WhatsApp message audit trail
@@ -375,6 +443,86 @@ model WhatsAppMessage {
   createdAt         DateTime @default(now())
 
   conversation WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+/// Durable inbound queue for production WhatsApp webhooks.
+model WhatsAppInboundEvent {
+  id              String    @id @default(cuid())
+  waMessageId     String    @unique
+  phoneNumberId   String?
+  customerPhone   String
+  businessId      String?
+  messageType     String
+  messageText     String?
+  interactiveId   String?
+  interactiveText String?
+  payload         Json
+  status          String    @default("PENDING")
+  attempts        Int       @default(0)
+  lockedAt        DateTime?
+  lockedBy        String?
+  nextAttemptAt   DateTime?
+  error           String?
+  createdAt       DateTime  @default(now())
+  processedAt     DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([customerPhone])
+  @@index([businessId])
+}
+
+/// Durable outbox for WhatsApp messages sent to Meta.
+model WhatsAppOutboundMessage {
+  id                String    @id @default(cuid())
+  idempotencyKey    String    @unique
+  conversationId    String
+  toPhone           String
+  phoneNumberId     String?
+  messageType       String
+  payload           Json
+  status            String    @default("PENDING")
+  providerMessageId String?
+  attempts          Int       @default(0)
+  lockedAt          DateTime?
+  lockedBy          String?
+  nextAttemptAt     DateTime?
+  error             String?
+  createdAt         DateTime  @default(now())
+  sentAt            DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([conversationId])
+}
+
+/// Short-lived idempotent booking decision created before WhatsApp confirmation.
+model BookingIntent {
+  id             String   @id @default(cuid())
+  conversationId String
+  businessId     String
+  customerPhone  String
+  serviceIds     Json
+  requestedTime  DateTime
+  totalDuration  Int
+  totalPrice     Decimal  @db.Decimal(10, 2)
+  status         String   @default("PENDING")
+  bookingId      String?
+  idempotencyKey String   @unique
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([conversationId])
+  @@index([businessId])
+  @@index([status, expiresAt])
+}
+
+/// Cross-process lock used by DB-backed WhatsApp workers.
+model WhatsAppProcessingLock {
+  lockKey   String   @id
+  lockedAt  DateTime @default(now())
+  lockedBy  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ============================================
@@ -522,6 +670,9 @@ model WhatsAppChannel {
   phoneNumberId      String    @unique
   wabaId             String?
   status             String    @default("PENDING") // "PENDING" | "CONNECTED" | "DISABLED" | "FAILED"
+  accessToken        String? // AES-256-GCM encrypted, base64 encoded
+  appSecret          String? // AES-256-GCM encrypted, base64 encoded
+  lastTestedAt       DateTime?
   qualityRating      String?
   messagingLimit     String?
   lastInboundAt      DateTime?
@@ -534,4 +685,68 @@ model WhatsAppChannel {
 
   @@index([businessId])
   @@index([phoneNumberId])
+}
+
+// ============================================
+// WHATSAPP FLOW ENGINE MODELS
+// ============================================
+
+/// Versioned flow definition — one row per version per business (Req 1.2)
+model WhatsAppFlow {
+  id          String     @id @default(cuid())
+  businessId  String
+  name        String
+  description String?
+  version     Int        @default(1)
+  status      FlowStatus @default(DRAFT)
+  isActive    Boolean    @default(false) // Kept for backward compatibility (Req 11.1)
+  entryNodeId String
+  definition  Json // FlowDefinition payload (nodes + edges graph)
+  createdBy   String? // owner userId who saved this version
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, version]) // retain history; no dup versions (Req 1.2)
+  @@index([businessId, status]) // status-based queries (Req 3.4)
+  @@index([businessId, isActive]) // fast "active flow for business" lookup (Req 1.3)
+}
+
+// ============================================
+// FLOW SIMULATOR MODELS
+// ============================================
+
+/// Isolated simulation session for admin flow testing (Req 7.1, 7.5, 10.1)
+model SimulationSession {
+  id            String   @id @default(cuid())
+  businessId    String
+  flowId        String
+  flowVersion   Int
+  adminId       String
+  currentNodeId String
+  contextData   Json     @default("{}")
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  messages SimulationMessage[]
+
+  @@index([businessId, adminId, lastMessageAt])
+  @@index([lastMessageAt])
+}
+
+/// Messages exchanged during a simulation session
+model SimulationMessage {
+  id          String   @id @default(cuid())
+  sessionId   String
+  direction   String // "inbound" | "outbound"
+  messageType String // "text" | "interactive"
+  content     Json
+  nodeId      String? // Which node produced/received this message
+  timestamp   DateTime @default(now())
+
+  session SimulationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, timestamp])
 }
