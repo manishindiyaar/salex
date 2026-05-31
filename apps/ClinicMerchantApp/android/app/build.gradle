@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.salex.merchant'
+    namespace 'com.salex.clinic'
     defaultConfig {
-        applicationId 'com.salex.merchant'
+        applicationId 'com.salex.clinic'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

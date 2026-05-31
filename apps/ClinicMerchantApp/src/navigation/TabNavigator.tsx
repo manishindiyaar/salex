@@ -1,4 +1,5 @@
 import React from 'react';
+import type { ComponentProps } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, StyleSheet } from 'react-native';
 import Icon from '@expo/vector-icons/Feather';
@@ -9,6 +10,7 @@ import ProfileScreen from '../screens/main/ProfileScreen';
 import { AccountSuspendedScreen } from '../screens/AccountSuspendedScreen';
 import { Colors } from '../theme/config';
 import { useBusinessStore } from '../store/businessStore';
+type FeatherIconName = ComponentProps<typeof Icon>['name'];
 
 /**
  * High-Strength 4-Tab Navigation
@@ -40,7 +42,7 @@ export default function TabNavigator() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName = 'home';
+          let iconName: FeatherIconName = 'home';
 
           if (route.name === 'Home') {
             iconName = 'home';

@@ -252,7 +252,7 @@ class FlowEngineService {
     }
 
     // 8. Complete: merge contextUpdates (Req 3.5)
-    let mergedContext: FlowContext = result.contextUpdates
+    const mergedContext: FlowContext = result.contextUpdates
       ? await flowContextBuilder.hydrate(businessId, { ...context, ...result.contextUpdates })
       : context;
 
@@ -545,7 +545,7 @@ class FlowEngineService {
   }> {
     const visited = new Set<string>();
     let currentId = startNodeId;
-    let currentContext = { ...context };
+    const currentContext = { ...context };
     let lastRenderedMessage: InteractiveMessage | null = null;
 
     for (let step = 0; step < MAX_AUTO_ADVANCE_STEPS; step++) {

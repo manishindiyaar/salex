@@ -53,6 +53,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Typecheck
+        run: pnpm type-check
+
       - name: Test
         run: pnpm exec turbo run test -- --passWithNoTests
 

@@ -11,7 +11,7 @@ import { userService } from './user.service';
 import { tokenService } from './token.service';
 import { getAuthFlags } from '../config/auth-flags';
 import { logger } from '../utils/logger';
-import { BusinessRuleError } from '../utils/errors';
+import { BusinessRuleError, ForbiddenError } from '../utils/errors';
 
 export interface AuthResult {
   success: boolean;
@@ -56,6 +56,10 @@ class AuthService {
       user = await userService.findOrCreate(phone);
     }
 
+    if (user.status !== 'ACTIVE') {
+      return { success: false, message: 'This account is not active. Contact your administrator.' };
+    }
+
     const token = tokenService.mintToken(user.id, user.phone, 'authenticated');
     logger.info({ userId: user.id, phone }, 'User authenticated via OTP');
 
@@ -81,6 +85,10 @@ class AuthService {
       return { success: false, message: 'User not found' };
     }
 
+    if (user.status !== 'ACTIVE') {
+      return { success: false, message: 'This account is not active' };
+    }
+
     return {
       success: true,
       message: 'User found',
@@ -95,6 +103,10 @@ class AuthService {
     const user = await userService.findById(userId);
     if (!user) {
       throw new BusinessRuleError('User not found');
+    }
+
+    if (user.status !== 'ACTIVE') {
+      throw new ForbiddenError('User account is not active');
     }
 
     const token = tokenService.mintToken(user.id, user.phone, 'authenticated');

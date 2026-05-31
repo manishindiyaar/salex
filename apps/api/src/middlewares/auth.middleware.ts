@@ -7,9 +7,9 @@
 
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { AuthContext, JwtPayload } from '@salex/shared-types';
+import { AuthContext, JwtPayload, prisma } from '@salex/shared-types';
 import { getConfig, isDevelopment } from '../config';
-import { UnauthorizedError } from '../utils/errors';
+import { ForbiddenError, UnauthorizedError } from '../utils/errors';
 import { logger } from '../utils/logger';
 
 // Extend Express Request to include auth context
@@ -45,11 +45,36 @@ const DEV_MOCK_USER: AuthContext = {
   role: 'merchant',
 };
 
+async function buildActiveAuthContext(decoded: JwtPayload): Promise<AuthContext> {
+  const user = await prisma.user.findUnique({
+    where: { id: decoded.sub },
+    select: {
+      id: true,
+      phone: true,
+      status: true,
+    },
+  });
+
+  if (!user) {
+    throw new UnauthorizedError('User not found');
+  }
+
+  if (user.status !== 'ACTIVE') {
+    throw new ForbiddenError('User account is not active');
+  }
+
+  return {
+    userId: user.id,
+    phone: user.phone,
+    role: decoded.role,
+  };
+}
+
 /**
  * Authentication middleware - validates JWT and attaches user context
  * In development with ENABLE_AUTH=false, bypasses auth and uses mock user
  */
-export function authMiddleware(req: Request, _res: Response, next: NextFunction) {
+export async function authMiddleware(req: Request, _res: Response, next: NextFunction) {
   try {
     const config = getConfig();
     
@@ -69,18 +94,14 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
     const decoded = jwt.verify(token, config.supabaseJwtSecret) as JwtPayload;
 
     // Attach auth context to request
-    req.auth = {
-      userId: decoded.sub,
-      phone: decoded.phone,
-      role: decoded.role,
-    };
+    req.auth = await buildActiveAuthContext(decoded);
 
     next();
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
-      next(new UnauthorizedError('Invalid authentication token'));
-    } else if (error instanceof jwt.TokenExpiredError) {
+    if (error instanceof jwt.TokenExpiredError) {
       next(new UnauthorizedError('Authentication token expired'));
+    } else if (error instanceof jwt.JsonWebTokenError) {
+      next(new UnauthorizedError('Invalid authentication token'));
     } else {
       next(error);
     }
@@ -90,7 +111,7 @@ export function authMiddleware(req: Request, _res: Response, next: NextFunction)
 /**
  * Optional auth middleware - attaches user context if token present, but doesn't require it
  */
-export function optionalAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
+export async function optionalAuthMiddleware(req: Request, _res: Response, next: NextFunction) {
   try {
     const token = extractToken(req.headers.authorization);
 
@@ -98,11 +119,7 @@ export function optionalAuthMiddleware(req: Request, _res: Response, next: NextF
       const config = getConfig();
       const decoded = jwt.verify(token, config.supabaseJwtSecret) as JwtPayload;
 
-      req.auth = {
-        userId: decoded.sub,
-        phone: decoded.phone,
-        role: decoded.role,
-      };
+      req.auth = await buildActiveAuthContext(decoded);
     }
 
     next();

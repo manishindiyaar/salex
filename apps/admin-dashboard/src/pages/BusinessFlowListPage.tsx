@@ -19,11 +19,9 @@ export const BusinessFlowListPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; isActive: boolean } | null>(null);
 
-  if (!businessId) {
-    return <Navigate to="/flows" replace />;
-  }
-
   const fetchFlows = async () => {
+    if (!businessId) return;
+
     setIsLoading(true);
     setError(null);
     try {
@@ -39,6 +37,10 @@ export const BusinessFlowListPage: React.FC = () => {
   useEffect(() => {
     fetchFlows();
   }, [businessId]);
+
+  if (!businessId) {
+    return <Navigate to="/flows" replace />;
+  }
 
   const handlePublish = async (id: string) => {
     setIsSaving(true);

@@ -1,5 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuthStore } from '../store/authStore';
 
 // Import screens
@@ -39,6 +40,12 @@ export type OnboardingStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
+type OnboardingScreen<RouteName extends keyof OnboardingStackParamList> =
+  React.ComponentType<NativeStackScreenProps<OnboardingStackParamList, RouteName>>;
+
+const OtpVerification = OtpVerificationScreen as unknown as OnboardingScreen<'OtpVerification'>;
+const BusinessIdentity = BusinessIdentityScreen as unknown as OnboardingScreen<'BusinessIdentity'>;
+const Goals = GoalsScreen as unknown as OnboardingScreen<'Goals'>;
 
 const OnboardingNavigator: React.FC = () => {
   const { isAuthenticated, user } = useAuthStore();
@@ -57,16 +64,16 @@ const OnboardingNavigator: React.FC = () => {
       <Stack.Screen name="Splash" component={SplashScreen} />
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="PhoneAuth" component={PhoneAuthScreen} />
-      <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
+      <Stack.Screen name="OtpVerification" component={OtpVerification} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       {/* OTP → BusinessIdentity */}
       <Stack.Screen
         name="BusinessIdentity"
-        component={BusinessIdentityScreen}
+        component={BusinessIdentity}
         initialParams={{ businessId: user?.id ?? '' }}
       />
       {/* BusinessIdentity → Goals */}
-      <Stack.Screen name="Goals" component={GoalsScreen} />
+      <Stack.Screen name="Goals" component={Goals} />
       <Stack.Screen name="ContactLocation" component={ContactLocationScreen} />
       <Stack.Screen name="ServicesPricing" component={ServicesPricingScreen} />
       <Stack.Screen name="ResourceSetup" component={ResourceSetupScreen} />
