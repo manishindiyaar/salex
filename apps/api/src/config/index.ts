@@ -7,6 +7,10 @@
 
 import { z } from 'zod';
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://salex-admin-dashboard.vercel.app',
+];
+
 const configSchema = z.object({
   // Server
   nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
@@ -19,10 +23,11 @@ const configSchema = z.object({
   ),
   allowedOrigins: z.preprocess(
     (val) => {
-      if (typeof val !== 'string') return [];
-      return val.split(',').map((origin) => origin.trim()).filter(Boolean);
+      if (typeof val !== 'string') return DEFAULT_ALLOWED_ORIGINS;
+      const origins = val.split(',').map((origin) => origin.trim()).filter(Boolean);
+      return Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, ...origins]));
     },
-    z.array(z.string().url()).default([])
+    z.array(z.string().url()).default(DEFAULT_ALLOWED_ORIGINS)
   ),
 
   // Supabase Cloud Database
