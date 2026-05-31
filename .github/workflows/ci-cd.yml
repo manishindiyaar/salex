@@ -135,6 +135,7 @@ jobs:
             echo "RAILWAY_STAGING_TOKEN is not set; skipping deploy."
             exit 0
           fi
+          npx @railway/cli variable set ALLOWED_ORIGINS=https://salex-admin-dashboard.vercel.app --service salex-api-staging --skip-deploys
           npx @railway/cli redeploy --service salex-api-staging -y
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
@@ -152,7 +153,7 @@ jobs:
             echo "RAILWAY_PRODUCTION_TOKEN is not set; skipping deploy."
             exit 0
           fi
+          npx @railway/cli variable set ALLOWED_ORIGINS=https://salex-admin-dashboard.vercel.app --service salex-api-production --skip-deploys
           npx @railway/cli redeploy --service salex-api-production -y
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
-
