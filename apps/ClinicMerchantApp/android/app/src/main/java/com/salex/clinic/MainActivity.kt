@@ -1,4 +1,4 @@
-package com.salex.merchant
+package com.salex.clinic
 
 import android.os.Build
 import android.os.Bundle

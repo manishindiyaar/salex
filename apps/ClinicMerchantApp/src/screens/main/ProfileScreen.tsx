@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import type { ComponentProps } from 'react';
 import {
   View,
   Text,
@@ -47,10 +48,12 @@ import {
   SubscriptionInfo,
 } from '../../components/subscription';
 
+type FeatherIconName = ComponentProps<typeof Icon>['name'];
+
 interface MenuItem {
   id: string;
   title: string;
-  icon: string;
+  icon: FeatherIconName;
   color?: string;
   onPress: () => void;
   rightText?: string;

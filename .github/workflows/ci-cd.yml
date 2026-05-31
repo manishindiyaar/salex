@@ -53,6 +53,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Typecheck
+        run: pnpm type-check
+
       - name: Test
         run: pnpm exec turbo run test -- --passWithNoTests
 
@@ -125,17 +128,16 @@ jobs:
     needs: migrate-non-production
     if: github.event_name == 'push' && github.ref_name == 'staging'
     environment: staging
-    env:
-      DEPLOY_HOOK_URL: ${{ secrets.RAILWAY_STAGING_DEPLOY_HOOK_URL }}
     steps:
       - name: Trigger Railway staging deploy
         run: |
-          if [ -z "$DEPLOY_HOOK_URL" ]; then
-            echo "RAILWAY_STAGING_DEPLOY_HOOK_URL is not set; skipping deploy hook."
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_STAGING_TOKEN is not set; skipping deploy."
             exit 0
           fi
-
-          curl -fsS -X POST "$DEPLOY_HOOK_URL"
+          npx @railway/cli redeploy --service salex-api-staging -y
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_STAGING_TOKEN }}
 
   deploy-production:
     name: Deploy Production API
@@ -143,14 +145,14 @@ jobs:
     needs: migrate-production
     if: github.event_name == 'push' && github.ref_name == 'main'
     environment: production
-    env:
-      DEPLOY_HOOK_URL: ${{ secrets.RAILWAY_PRODUCTION_DEPLOY_HOOK_URL }}
     steps:
       - name: Trigger Railway production deploy
         run: |
-          if [ -z "$DEPLOY_HOOK_URL" ]; then
-            echo "RAILWAY_PRODUCTION_DEPLOY_HOOK_URL is not set; skipping deploy hook."
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_PRODUCTION_TOKEN is not set; skipping deploy."
             exit 0
           fi
+          npx @railway/cli redeploy --service salex-api-production -y
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
 
-          curl -fsS -X POST "$DEPLOY_HOOK_URL"

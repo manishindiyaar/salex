@@ -1,5 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAuthStore } from '../store/authStore';
 
 // Import screens
@@ -35,6 +36,11 @@ export type OnboardingStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
+type OnboardingScreen<RouteName extends keyof OnboardingStackParamList> =
+  React.ComponentType<NativeStackScreenProps<OnboardingStackParamList, RouteName>>;
+
+const OtpVerification = OtpVerificationScreen as unknown as OnboardingScreen<'OtpVerification'>;
+const BusinessIdentity = BusinessIdentityScreen as unknown as OnboardingScreen<'BusinessIdentity'>;
 
 const OnboardingNavigator: React.FC = () => {
   const { isAuthenticated, user } = useAuthStore();
@@ -52,12 +58,12 @@ const OnboardingNavigator: React.FC = () => {
     >
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="PhoneAuth" component={PhoneAuthScreen} />
-      <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
+      <Stack.Screen name="OtpVerification" component={OtpVerification} />
       <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       {/* OTP → directly to BusinessIdentity, no type selection needed */}
       <Stack.Screen
         name="BusinessIdentity"
-        component={BusinessIdentityScreen}
+        component={BusinessIdentity}
         initialParams={{ businessId: user?.id ?? '' }}
       />
       <Stack.Screen name="ContactLocation" component={ContactLocationScreen} />

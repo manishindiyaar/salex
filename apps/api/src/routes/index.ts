@@ -26,6 +26,7 @@ import { adminFlowRoutes, adminFlowReadinessRoutes, adminFlowContextRoutes } fro
 import { adminSimulatorRoutes } from './admin-simulator.routes';
 import { adminWhatsAppChannelRoutes } from './admin-whatsapp-channel.routes';
 import flowRoutes from './flow.routes';
+import { areSimulatorRoutesEnabled } from '../config';
 
 const router: Router = Router();
 
@@ -59,10 +60,12 @@ router.use('/api/v1/webhooks', webhookRoutes);
 // Keep this alias so /v1/webhooks/whatsapp verifies too.
 router.use('/v1/webhooks', webhookRoutes);
 
-// WhatsApp Simulator routes (development)
-router.use('/api/v1/whatsapp-simulator', simulatorRoutes);
+if (areSimulatorRoutesEnabled()) {
+  // WhatsApp Simulator routes (development or explicit opt-in)
+  router.use('/api/v1/whatsapp-simulator', simulatorRoutes);
 
-// Legacy webhook endpoint for WhatsApp Mock UI compatibility
-router.use('/simulate-webhooks', simulatorWebhookRouter);
+  // Legacy webhook endpoint for WhatsApp Mock UI compatibility
+  router.use('/simulate-webhooks', simulatorWebhookRouter);
+}
 
 export default router;

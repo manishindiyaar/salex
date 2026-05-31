@@ -83,6 +83,11 @@ const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({ route, na
 
     try {
       const { user } = await authService.verifyOtp(phoneNumber, otpCode);
+      if (!user) {
+        setError('Unable to verify account. Please try again.');
+        return;
+      }
+
       updateAuthStep('auth_complete');
       setUserPhone(phoneNumber); // Store phone for business creation
 
@@ -136,7 +141,7 @@ const OtpVerificationScreen: React.FC<OtpVerificationScreenProps> = ({ route, na
             </TouchableOpacity>
 
             <View style={styles.logoContainer}>
-              <Icon name="shield-check" size={32} color={Colors.PRIMARY} />
+              <Icon name="shield" size={32} color={Colors.PRIMARY} />
             </View>
 
             <Text style={styles.title}>Verify your number</Text>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import type { ComponentProps } from 'react';
 import {
   View,
   Text,
@@ -10,12 +11,14 @@ import {
 import Icon from '@expo/vector-icons/Feather';
 import { Colors, Typography, BorderRadius, Spacing } from '../../theme/config';
 
+type FeatherIconName = ComponentProps<typeof Icon>['name'];
+
 interface InputProps extends TextInputProps {
   label?: string;
   error?: string;
   hint?: string;
-  leftIcon?: string;
-  rightIcon?: string;
+  leftIcon?: FeatherIconName;
+  rightIcon?: FeatherIconName;
   onRightIconPress?: () => void;
   containerStyle?: ViewStyle;
   required?: boolean;

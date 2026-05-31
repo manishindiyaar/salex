@@ -17,6 +17,13 @@ const configSchema = z.object({
     (val) => val === undefined ? true : val === 'true' || val === true,
     z.boolean().default(true)
   ),
+  allowedOrigins: z.preprocess(
+    (val) => {
+      if (typeof val !== 'string') return [];
+      return val.split(',').map((origin) => origin.trim()).filter(Boolean);
+    },
+    z.array(z.string().url()).default([])
+  ),
 
   // Supabase Cloud Database
   databaseUrl: z.string().min(1, 'DATABASE_URL is required'),
@@ -55,6 +62,10 @@ const configSchema = z.object({
   ),
 
   // Simulator
+  enableSimulatorRoutes: z.preprocess(
+    (val) => val === undefined ? false : val === 'true' || val === true,
+    z.boolean().default(false)
+  ),
   simulatorDefaultBusinessId: z.string().optional(),
   webhookBaseUrl: z.string().default('http://localhost:3001'),
 });
@@ -66,6 +77,7 @@ function loadConfig(): AppConfig {
     nodeEnv: process.env.NODE_ENV,
     port: process.env.PORT,
     enableAuth: process.env.ENABLE_AUTH,
+    allowedOrigins: process.env.ALLOWED_ORIGINS,
 
     databaseUrl: process.env.DATABASE_URL,
     directUrl: process.env.DIRECT_URL,
@@ -92,6 +104,7 @@ function loadConfig(): AppConfig {
     flowEngineGlobalCutover: process.env.FLOW_ENGINE_GLOBAL_CUTOVER,
 
     simulatorDefaultBusinessId: process.env.SIMULATOR_DEFAULT_BUSINESS_ID,
+    enableSimulatorRoutes: process.env.ENABLE_SIMULATOR_ROUTES,
     webhookBaseUrl: process.env.WEBHOOK_BASE_URL,
   };
 
@@ -127,4 +140,9 @@ export function isProduction(): boolean {
 
 export function isSimulatorMode(): boolean {
   return getConfig().whatsappMode === 'simulator';
+}
+
+export function areSimulatorRoutesEnabled(): boolean {
+  const config = getConfig();
+  return isDevelopment() || config.enableSimulatorRoutes;
 }

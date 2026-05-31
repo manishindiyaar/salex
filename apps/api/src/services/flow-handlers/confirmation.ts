@@ -214,7 +214,7 @@ export const confirmationHandler: NodeHandler = {
 
       const expiresAt = new Date(Date.now() + holdMinutes * 60 * 1000);
 
-      let bookingIntent = await prisma.bookingIntent.upsert({
+      const bookingIntent = await prisma.bookingIntent.upsert({
         where: { idempotencyKey },
         update: {
           // Refresh expiry on re-attempt if still PENDING

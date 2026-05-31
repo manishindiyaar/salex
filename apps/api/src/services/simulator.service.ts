@@ -432,7 +432,7 @@ class SimulatorService {
     }
 
     // 10. Complete: merge contextUpdates
-    let mergedContext: FlowContext = result.contextUpdates
+    const mergedContext: FlowContext = result.contextUpdates
       ? await flowContextBuilder.hydrate(flow.businessId, { ...context, ...result.contextUpdates })
       : context;
 
@@ -873,7 +873,7 @@ class SimulatorService {
   }> {
     const visited = new Set<string>();
     let currentId = startNodeId;
-    let currentContext = { ...context };
+    const currentContext = { ...context };
     let lastRenderedMessage: InteractiveMessage | null = null;
     const intermediateMessages: { message: InteractiveMessage; nodeId: string }[] = [];
 

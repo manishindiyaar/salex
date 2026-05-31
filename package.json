@@ -9,6 +9,7 @@
     "dev:clinic": "turbo run dev --filter=clinic-merchant-app",
     "dev:admin": "turbo run dev --filter=admin-dashboard",
     "build": "turbo run build",
+    "type-check": "turbo run type-check",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "clean": "turbo run clean",

@@ -222,7 +222,7 @@ export const bookingHandler: NodeHandler = {
     }
 
     // Load the existing hold
-    let bookingIntent = await prisma.bookingIntent.findUnique({
+    const bookingIntent = await prisma.bookingIntent.findUnique({
       where: { id: bookingIntentId },
     });
 
