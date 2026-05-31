@@ -23,6 +23,10 @@ export type {
   BookingItem,
   WhatsAppConversation,
   WhatsAppMessage,
+  WhatsAppInboundEvent,
+  WhatsAppOutboundMessage,
+  BookingIntent,
+  WhatsAppProcessingLock,
   CustomerSession,
   SimulatorMessage,
   UserRole,
@@ -40,6 +44,12 @@ export type {
   SubscriptionStatus,
   AdminRole,
   BusinessCategory,
+  // Auth method types
+  AuthMethod,
+  UserStatus,
+  AuthMethodType,
+  AuthMethodStatus,
+  PhoneVerificationSource,
 } from '@prisma/client';
 
 // ============================================
@@ -51,6 +61,26 @@ export * from './schemas';
 // UTILITIES
 // ============================================
 export { formatZodErrors, getZodErrorMessages, getFirstZodError } from './utils/format-zod-errors';
+
+// ============================================
+// VERTICALS
+// ============================================
+export { BUSINESS_VERTICALS, getVerticalConfig } from './verticals/business-verticals';
+export type { VerticalConfig, VerticalTerminology, DefaultService, DayHours } from './verticals/business-verticals';
+
+// ============================================
+// FLOW TYPES
+// ============================================
+export type {
+  NodeType,
+  EdgeOperator,
+  EdgeCondition,
+  FlowEdge,
+  FlowNode,
+  FlowDefinition,
+  FlowRecord,
+  FlowSummary,
+} from './types/flow';
 
 // ============================================
 // COMMON TYPES

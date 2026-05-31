@@ -57,6 +57,7 @@ export const updateBusinessSchema = z.object({
   hoursOfOperation: hoursOfOperationSchema,
   maxConcurrentBookings: z.number().int().min(1).max(20).optional(),
   isAcceptingOrders: z.boolean().optional(),
+  onboardingCompleted: z.boolean().optional(),
   address: z.string().max(500).optional(), // NEW: Address field
 });
 

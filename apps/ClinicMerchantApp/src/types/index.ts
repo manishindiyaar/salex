@@ -28,6 +28,7 @@ export interface Business {
   maxConcurrentBookings?: number;
   isAcceptingOrders?: boolean;
   isActive?: boolean; // NEW: Business active status
+  onboardingCompleted?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -43,6 +44,7 @@ export interface CreateBusinessInput {
   hoursOfOperation?: Record<string, { open: string; close: string; closed?: boolean }>;
   maxConcurrentBookings?: number;
   isAcceptingOrders?: boolean;
+  onboardingCompleted?: boolean;
 }
 
 export interface UpdateBusinessInput {
@@ -54,6 +56,7 @@ export interface UpdateBusinessInput {
   hoursOfOperation?: Record<string, { open: string; close: string; closed?: boolean }>;
   maxConcurrentBookings?: number;
   isAcceptingOrders?: boolean;
+  onboardingCompleted?: boolean;
 }
 
 export interface Service {

@@ -67,6 +67,25 @@ export interface AvailabilityWithSuggestions {
   message?: string;
 }
 
+// ============================================
+// Bulk Availability Types (Req 6.1–6.6)
+// ============================================
+
+export interface BulkBookingRow {
+  id: string;
+  scheduledAt: Date;
+  endAt: Date;
+  resourceId: string | null;
+  staffId: string | null;
+}
+
+export interface BulkAvailabilityData {
+  effectiveCapacity: number;       // min(activeResources, activeStaff) (Req 6.3)
+  bookings: BulkBookingRow[];      // PENDING|CONFIRMED overlapping [start,end)
+  activeResourceCount: number;
+  activeStaffCount: number;
+}
+
 class AvailabilityService {
   /**
    * Get effective capacity for a business
@@ -520,6 +539,144 @@ class AvailabilityService {
     });
 
     return bookings;
+  }
+
+  // ============================================
+  // Bulk Availability Methods (Req 6.1–6.6)
+  // ============================================
+
+  /**
+   * Retrieve effective capacity, overlapping bookings, active staff, and active resources
+   * for a search range in a single bounded set of queries (independent of slot count).
+   * 
+   * Issues exactly 3 parallel queries:
+   * 1. Active resource count
+   * 2. Active staff count
+   * 3. Overlapping PENDING|CONFIRMED bookings in [start, end)
+   * 
+   * Req 6.1: bounded, slot-count-independent queries
+   * Req 6.3: effectiveCapacity = min(activeResources, activeStaff)
+   */
+  async getBulkAvailabilityData(
+    businessId: string,
+    start: Date,
+    end: Date,
+  ): Promise<BulkAvailabilityData> {
+    const [activeResourceCount, activeStaffCount, bookings] = await Promise.all([
+      prisma.resource.count({ where: { businessId, isActive: true } }),
+      prisma.staff.count({ where: { businessId, isActive: true } }),
+      prisma.booking.findMany({
+        where: {
+          businessId,
+          status: { in: ['PENDING', 'CONFIRMED'] },
+          AND: [
+            { scheduledAt: { lt: end } },
+            { endAt: { gt: start } },
+          ],
+        },
+        select: {
+          id: true,
+          scheduledAt: true,
+          endAt: true,
+          resourceId: true,
+          staffId: true,
+        },
+      }),
+    ]);
+
+    const effectiveCapacity = Math.min(activeResourceCount, activeStaffCount);
+
+    return {
+      effectiveCapacity,
+      bookings,
+      activeResourceCount,
+      activeStaffCount,
+    };
+  }
+
+  /**
+   * Pure in-memory slot availability check using the capacity-count formula.
+   * 
+   * A slot is bookable iff:
+   * - effectiveCapacity > 0, AND
+   * - the count of overlapping bookings is strictly less than effectiveCapacity
+   * 
+   * Overlap: booking.scheduledAt < slotEnd && booking.endAt > slotStart (Req 6.4)
+   * Bookable: overlapCount < effectiveCapacity (Req 6.5)
+   * 
+   * This is the canonical engine rule going forward for custom flows.
+   */
+  isSlotBookable(
+    data: BulkAvailabilityData,
+    slotStart: Date,
+    slotEnd: Date,
+  ): boolean {
+    if (data.effectiveCapacity <= 0) {
+      return false;
+    }
+
+    const overlapCount = data.bookings.filter(
+      (b) => b.scheduledAt < slotEnd && b.endAt > slotStart
+    ).length;
+
+    return overlapCount < data.effectiveCapacity;
+  }
+
+  /**
+   * Pure in-memory slot availability check reproducing the legacy
+   * `getAvailabilityWithSuggestions(...).available` determination.
+   * 
+   * Legacy logic: available = availableResources.length > 0 && availableStaff.length > 0
+   * where a resource is "available" iff no overlapping booking has that resourceId,
+   * and a staff member is "available" iff no overlapping booking has that staffId.
+   * 
+   * Bookings with null resourceId do NOT consume a resource slot.
+   * Bookings with null staffId do NOT consume a staff slot.
+   * 
+   * This reproduces the per-entity free-resource-AND-free-staff determination
+   * used by the Default_Flow time_picker for migration parity (Req 6.6, 9.2).
+   */
+  isSlotBookableLegacyParity(
+    data: BulkAvailabilityData,
+    slotStart: Date,
+    slotEnd: Date,
+  ): boolean {
+    // If no resources or no staff configured, not bookable
+    if (data.activeResourceCount <= 0 || data.activeStaffCount <= 0) {
+      return false;
+    }
+
+    // Find bookings that overlap with this specific slot
+    const overlapping = data.bookings.filter(
+      (b) => b.scheduledAt < slotEnd && b.endAt > slotStart
+    );
+
+    // Count distinct busy resource IDs (only non-null resourceIds count)
+    const busyResourceIds = new Set<string>();
+    for (const b of overlapping) {
+      if (b.resourceId !== null) {
+        busyResourceIds.add(b.resourceId);
+      }
+    }
+
+    // Count distinct busy staff IDs (only non-null staffIds count)
+    const busyStaffIds = new Set<string>();
+    for (const b of overlapping) {
+      if (b.staffId !== null) {
+        busyStaffIds.add(b.staffId);
+      }
+    }
+
+    // A resource is "available" if it's not in the busy set
+    // availableResources = activeResourceCount - busyResourceIds.size
+    const availableResourceCount = data.activeResourceCount - busyResourceIds.size;
+
+    // A staff member is "available" if it's not in the busy set
+    // availableStaff = activeStaffCount - busyStaffIds.size
+    const availableStaffCount = data.activeStaffCount - busyStaffIds.size;
+
+    // Legacy: available = availableResources.length > 0 && availableStaff.length > 0
+    return availableResourceCount > 0 && availableStaffCount > 0;
   }
 
   /**

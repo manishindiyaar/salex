@@ -13,6 +13,7 @@ import { Colors, Spacing, Typography } from '../../theme/config';
 import { useAuth } from '../../context/AuthContext';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { createBusinessService } from '../../services/serviceService';
+import { updateBusiness } from '../../services/businessService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface ReviewCompleteScreenProps {
@@ -63,6 +64,8 @@ const ReviewCompleteScreen: React.FC<ReviewCompleteScreenProps> = ({ navigation 
 
         console.log('🎉 All services saved!');
       }
+
+      await updateBusiness(businessId, { onboardingCompleted: true });
       
       // Simulate QR code generation delay
       setTimeout(() => {

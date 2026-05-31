@@ -1,5 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useAuthStore } from '../store/authStore';
 
 // Import screens
 import SplashScreen from '../screens/SplashScreen';
@@ -7,6 +8,7 @@ import WelcomeScreen from '../screens/WelcomeScreen';
 import PhoneAuthScreen from '../screens/auth/PhoneAuthScreen';
 import OtpVerificationScreen from '../screens/auth/OtpVerificationScreen';
 import TestOtpScreen from '../screens/auth/TestOtpScreen';
+import ChangePasswordScreen from '../screens/auth/ChangePasswordScreen';
 import BusinessIdentityScreen from '../screens/onboarding/BusinessIdentityScreen';
 import GoalsScreen from '../screens/onboarding/GoalsScreen';
 import ContactLocationScreen from '../screens/onboarding/ContactLocationScreen';
@@ -24,6 +26,7 @@ export type OnboardingStackParamList = {
   Welcome: undefined;
   PhoneAuth: undefined;
   OtpVerification: { phoneNumber: string };
+  ChangePassword: { currentPassword: string };
   TestOtp: undefined;
   BusinessIdentity: { businessId: string };
   Goals: { businessId: string };
@@ -38,9 +41,12 @@ export type OnboardingStackParamList = {
 const Stack = createNativeStackNavigator<OnboardingStackParamList>();
 
 const OnboardingNavigator: React.FC = () => {
+  const { isAuthenticated, user } = useAuthStore();
+  const initialRouteName = isAuthenticated && !user?.mustChangePassword ? 'BusinessIdentity' : 'Splash';
+
   return (
     <Stack.Navigator
-      initialRouteName="Splash"
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
@@ -52,8 +58,13 @@ const OnboardingNavigator: React.FC = () => {
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="PhoneAuth" component={PhoneAuthScreen} />
       <Stack.Screen name="OtpVerification" component={OtpVerificationScreen} />
+      <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
       {/* OTP → BusinessIdentity */}
-      <Stack.Screen name="BusinessIdentity" component={BusinessIdentityScreen} />
+      <Stack.Screen
+        name="BusinessIdentity"
+        component={BusinessIdentityScreen}
+        initialParams={{ businessId: user?.id ?? '' }}
+      />
       {/* BusinessIdentity → Goals */}
       <Stack.Screen name="Goals" component={GoalsScreen} />
       <Stack.Screen name="ContactLocation" component={ContactLocationScreen} />

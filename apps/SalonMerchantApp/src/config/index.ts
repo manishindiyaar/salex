@@ -9,13 +9,12 @@
 const isDev = __DEV__;
 
 // Authentication Toggle Configuration
-// Auth is ALWAYS enabled - we use real OTP flow
 export const AUTH_CONFIG = {
-  // Always enable auth - use real OTP flow with backend
+  // Always enable auth
   ENABLE_AUTH: true,
   
-  // Dev mode uses magic OTP "123456" on backend
-  DEV_MAGIC_OTP: '123456',
+  // Auth mode: 'password' for admin-provisioned accounts, 'otp' when OTP is enabled
+  AUTH_MODE: 'password' as const,
 } as const;
 
 // API Configuration

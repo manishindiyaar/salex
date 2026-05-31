@@ -13,10 +13,10 @@ declare global {
 }
 
 const prismaClientSingleton = () => {
+  const shouldLogQueries = process.env.PRISMA_QUERY_LOGS === 'true';
+
   return new PrismaClient({
-    log: process.env.NODE_ENV === 'development' 
-      ? ['query', 'error', 'warn'] 
-      : ['error'],
+    log: shouldLogQueries ? ['query', 'error', 'warn'] : ['error', 'warn'],
     datasources: {
       db: {
         url: process.env.DATABASE_URL,

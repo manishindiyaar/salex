@@ -13,6 +13,7 @@ export interface AuthUser {
   id: string;
   phone: string;
   role: string;
+  mustChangePassword?: boolean;
 }
 
 interface AuthState {

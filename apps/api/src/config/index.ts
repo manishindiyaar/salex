@@ -33,10 +33,6 @@ const configSchema = z.object({
   twilioAuthToken: z.string().optional(),
   twilioVerifyServiceSid: z.string().optional(),
 
-  // Development OTP Bypass
-  devPhoneWhitelist: z.array(z.string()).default([]),
-  devMagicOtp: z.string().default('123456'),
-
   // WhatsApp
   whatsappAppSecret: z.string().optional(),
   whatsappAccessToken: z.string().optional(),
@@ -44,6 +40,19 @@ const configSchema = z.object({
   whatsappVerifyToken: z.string().optional(),
   whatsappGraphApiVersion: z.string().default('v25.0'),
   whatsappMode: z.enum(['production', 'simulator']).default('simulator'),
+  whatsappDbWorkersEnabled: z.preprocess(
+    (val) => val === undefined ? true : val === 'true' || val === true,
+    z.boolean().default(true)
+  ),
+
+  // Channel Encryption
+  channelEncryptionKey: z.string().length(64).optional(), // 32 bytes hex for AES-256
+
+  // Flow Engine
+  flowEngineGlobalCutover: z.preprocess(
+    (val) => val === undefined ? false : val === 'true' || val === true,
+    z.boolean().default(false)
+  ),
 
   // Simulator
   simulatorDefaultBusinessId: z.string().optional(),
@@ -70,15 +79,17 @@ function loadConfig(): AppConfig {
     twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
     twilioVerifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID,
 
-    devPhoneWhitelist: process.env.DEV_PHONE_WHITELIST?.split(',').filter(Boolean) || [],
-    devMagicOtp: process.env.DEV_MAGIC_OTP,
-
     whatsappAppSecret: process.env.WHATSAPP_APP_SECRET,
     whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN,
     whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
     whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
     whatsappGraphApiVersion: process.env.WHATSAPP_GRAPH_API_VERSION,
     whatsappMode: process.env.WHATSAPP_MODE,
+    whatsappDbWorkersEnabled: process.env.WHATSAPP_DB_WORKERS_ENABLED,
+
+    channelEncryptionKey: process.env.CHANNEL_ENCRYPTION_KEY,
+
+    flowEngineGlobalCutover: process.env.FLOW_ENGINE_GLOBAL_CUTOVER,
 
     simulatorDefaultBusinessId: process.env.SIMULATOR_DEFAULT_BUSINESS_ID,
     webhookBaseUrl: process.env.WEBHOOK_BASE_URL,
@@ -116,8 +127,4 @@ export function isProduction(): boolean {
 
 export function isSimulatorMode(): boolean {
   return getConfig().whatsappMode === 'simulator';
-}
-
-export function isPhoneWhitelisted(phone: string): boolean {
-  return getConfig().devPhoneWhitelist.includes(phone);
 }
