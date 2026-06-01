@@ -5,6 +5,7 @@ import { Alert, Badge, Button, Card, CardBody, CardHeader, Modal } from '@/compo
 import { apiClient } from '@/services/apiClient';
 import { useBusinessStore } from '@/store/businessStore';
 import { ArrowLeft, RefreshCw, Plus } from 'lucide-react';
+import { WhatsAppChannelConfig } from '@/components/business/WhatsAppChannelConfig';
 
 type TabId = 'overview' | 'access' | 'subscription' | 'payments' | 'whatsapp' | 'bookings' | 'support' | 'audit';
 
@@ -591,7 +592,11 @@ export const BusinessDetailPage: React.FC = () => {
 
       {/* ── WhatsApp ── */}
       {activeTab === 'whatsapp' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="space-y-4">
+          {/* Dedicated Channel Configuration */}
+          <WhatsAppChannelConfig businessId={business.id} />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
             <CardHeader title="WhatsApp Channel Status" subtitle="Onboarding details and mode" />
             <CardBody>
@@ -612,12 +617,6 @@ export const BusinessDetailPage: React.FC = () => {
                 <div className="space-y-4 text-center py-6">
                   <p className="text-[13px]" style={{ color: '#A8A6B0' }}>
                     No dedicated channel configured; shared routing is used.
-                  </p>
-                  <Button variant="secondary" size="sm" disabled={true} title="Provisioning workflow pending Meta setup">
-                    Provision dedicated number
-                  </Button>
-                  <p className="text-[10px] italic" style={{ color: '#C9C7CF' }}>
-                    Coming after Meta onboarding workflow is wired.
                   </p>
                 </div>
               )}
@@ -647,6 +646,7 @@ export const BusinessDetailPage: React.FC = () => {
               </ListEmpty>
             </CardBody>
           </Card>
+        </div>
         </div>
       )}
 

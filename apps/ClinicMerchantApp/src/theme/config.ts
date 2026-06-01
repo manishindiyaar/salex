@@ -26,6 +26,7 @@ export const Colors = {
   primary: '#00FF00',              // Salex Green - money, success, primary actions
   primaryDark: '#00CC00',          // Darker green for pressed states
   secondary: '#00AAFF',            // Blue - in progress, info
+  info: '#00AAFF',                 // Blue - neutral info messaging
   success: '#00FF00',              // Salex Green - same as primary
   warning: '#FFB800',              // Amber - pending, caution
   error: '#FF3333',                // Alert Red - errors, deny, cancel
@@ -38,6 +39,7 @@ export const Colors = {
   PRIMARY: '#00FF00',              // Salex Green
   PRIMARY_DARK: '#00CC00',
   SECONDARY: '#00AAFF',
+  INFO: '#00AAFF',
   BACKGROUND: '#000000',           // Deep Black
   SURFACE: '#0A0A0A',
   SURFACE_ELEVATED: '#141414',

@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-const API_BASE_URL = '/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -172,7 +172,11 @@ class ApiClient {
     return response.data;
   }
 
-
+  // Merchant provisioning
+  async provisionMerchant(payload: any) {
+    const response = await this.client.post('/admin/merchant-accounts', payload);
+    return response.data;
+  }
 
   // Health endpoints
   async getSystemHealth() {

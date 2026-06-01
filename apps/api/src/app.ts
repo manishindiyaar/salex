@@ -11,7 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 import routes from './routes';
 import { errorMiddleware } from './middlewares';
-import { isDevelopment } from './config';
+import { getConfig, isDevelopment } from './config';
 
 declare global {
   namespace Express {
@@ -23,6 +23,7 @@ declare global {
 
 export function createApp(): Express {
   const app = express();
+  const config = getConfig();
 
   // Security middleware
   app.use(helmet());
@@ -43,18 +44,10 @@ export function createApp(): Express {
         return;
       }
       
-      // Allow localhost for simulator
-      if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.startsWith('file://')) {
-        callback(null, true);
-        return;
-      }
-      
-      // Check allowed origins
-      const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
-      if (allowedOrigins.includes(origin)) {
+      if (config.allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(null, true); // Allow anyway for now, tighten in production
+        callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,

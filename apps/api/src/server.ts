@@ -7,6 +7,7 @@ import 'dotenv/config';
 
 import { createApp } from './app';
 import { getConfig } from './config';
+import { whatsappDbWorkerService } from './services/whatsapp-db-worker.service';
 import logger from './utils/logger';
 
 async function main() {
@@ -24,9 +25,14 @@ async function main() {
       logger.info(`🔗 Health check: http://localhost:${config.port}/health`);
     });
 
+    if (config.whatsappDbWorkersEnabled) {
+      whatsappDbWorkerService.start();
+    }
+
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       logger.info(`${signal} received, shutting down gracefully...`);
+      whatsappDbWorkerService.stop();
       
       server.close(() => {
         logger.info('HTTP server closed');

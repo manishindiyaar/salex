@@ -9,20 +9,23 @@
 const isDev = __DEV__;
 
 // Authentication Toggle Configuration
-// Auth is ALWAYS enabled - we use real OTP flow
 export const AUTH_CONFIG = {
-  // Always enable auth - use real OTP flow with backend
+  // Always enable auth
   ENABLE_AUTH: true,
   
-  // Dev mode uses magic OTP "123456" on backend
-  DEV_MAGIC_OTP: '123456',
+  // Auth mode: 'password' for admin-provisioned accounts, 'otp' when OTP is enabled
+  AUTH_MODE: 'password' as const,
 } as const;
 
 // API Configuration
+// Use your Mac's LAN IP for dev so physical devices on the same WiFi can reach the API.
+// Update LAN_IP if your network changes.
+const LAN_IP = '192.168.1.10';
+
 export const API_CONFIG = {
   BASE_URL: isDev 
-    ? 'http://localhost:3001/api/v1'
-    : 'https://api.salex.app/api/v1',
+    ? `http://${LAN_IP}:3001/api/v1`
+    : 'https://salex-api-staging-staging.up.railway.app/api/v1',
   
   TIMEOUT_MS: 10000,
   

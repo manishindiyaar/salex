@@ -38,6 +38,8 @@ class WhatsAppMessageAuditService {
     message: InteractiveMessage;
     status?: 'sent' | 'failed';
     error?: unknown;
+    /** Engine that handled the message, recorded for parity verification (Req 11.5). */
+    engine?: 'flow' | 'legacy';
   }): Promise<void> {
     await this.safeCreate({
       conversationId: input.conversationId,
@@ -46,6 +48,7 @@ class WhatsAppMessageAuditService {
       messageType: input.message.type === 'button' ? 'interactive' : input.message.type,
       content: {
         message: input.message,
+        ...(input.engine ? { engine: input.engine } : {}),
         ...(input.error ? { error: this.serializeError(input.error) } : {}),
       },
       status: input.status || 'sent',

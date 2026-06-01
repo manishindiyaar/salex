@@ -13,6 +13,33 @@
  * - Routing code association
  * - 24-hour timeout reset
  * - Interactive message generation
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * @deprecated LEGACY STATE MACHINE — SCHEDULED FOR REMOVAL (Req 11.3, 11.5)
+ *
+ * This service contains the legacy switch-case state machine that is being
+ * replaced by the Flow_Engine (see flow-engine.service.ts). The Engine_Router
+ * currently routes traffic here for businesses not yet migrated to the
+ * Flow_Engine, and as a fallback when the Flow_Engine errors (Req 11.4).
+ *
+ * REMOVAL GATE: The legacy switch-case handlers (handleGreeting,
+ * handleRoutingCode, handleServiceSelection, handleTimeSelection,
+ * handleConfirmation, and the processMessage switch block) may be removed
+ * ONLY AFTER the soak/verification window confirms parity via:
+ *   1. Golden tests passing (tasks 15.1, 16.x)
+ *   2. Engine-marker diffing showing equivalent outcomes (task 20.2)
+ *   3. Platform admin enables global cutover (Req 11.3)
+ *
+ * SHARED HELPERS TO RETAIN after removal:
+ *   - ensureCustomer() — used by Flow_Engine for customer identity (Req 15.4)
+ *   - ensureBusinessCustomer() — Foundation V2 identity records
+ *   - normalizePhoneNumber() — shared utility
+ *   - getOrCreateConversation() — may be refactored but still needed
+ *   - InteractiveMessage type exports — used across the codebase
+ *
+ * DO NOT REMOVE legacy code until the verification gate above is met.
+ * See: tasks.md task 22.1, requirements 11.3, 11.5
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import { prisma, WhatsAppConversation, Customer } from '@salex/shared-types';
@@ -27,6 +54,7 @@ import { bookingService } from './booking.service';
 import { businessService } from './business.service';
 import { routingService } from './routing.service';
 import { featureAccessService } from './feature-access.service';
+import { availabilityService } from './availability.service';
 
 // 24 hours in milliseconds
 const CONVERSATION_TIMEOUT_MS = 24 * 60 * 60 * 1000;
@@ -252,8 +280,8 @@ class ConversationService {
 
     // Merge context data
     const existingContext = conversationContextSchema.parse(conversation.contextData || {});
-    const newContext = contextData 
-      ? { ...existingContext, ...contextData }
+    const newContext = contextData
+      ? this.compactContext({ ...existingContext, ...contextData })
       : existingContext;
 
     const updated = await prisma.whatsAppConversation.update({
@@ -261,6 +289,7 @@ class ConversationService {
       data: {
         state,
         contextData: newContext,
+        version: { increment: 1 },
         lastMessageAt: new Date(),
       },
       include: {
@@ -377,6 +406,12 @@ class ConversationService {
   /**
    * Process incoming message and return response
    * This is the main state machine handler
+   *
+   * @deprecated LEGACY SWITCH-CASE HANDLER — Remove after parity verification gate.
+   * The Flow_Engine (flow-engine.service.ts) replaces this method for migrated
+   * businesses. This method is retained as the Engine_Router fallback (Req 11.4)
+   * and for businesses not yet on the Flow_Engine (Req 11.2).
+   * See file-level deprecation notice for removal criteria.
    */
   async processMessage(
     customerPhone: string,
@@ -400,6 +435,12 @@ class ConversationService {
       interactiveReply 
     }, 'Processing message');
 
+    // ─── LEGACY SWITCH-CASE STATE MACHINE ───────────────────────────────
+    // TODO(post-parity): Remove this switch block and the private handle*
+    // methods below once the soak window confirms parity (golden tests +
+    // engine-marker diffing). The Flow_Engine graph runner replaces all of
+    // these state transitions. Retain shared helpers (see file header).
+    // ─────────────────────────────────────────────────────────────────────
     switch (state) {
       case 'GREETING':
         return this.handleGreeting(conversation);
@@ -417,6 +458,17 @@ class ConversationService {
         return this.handleConfirmation(conversation, messageText, interactiveReply);
 
       case 'COMPLETED':
+        if (interactiveReply?.id === 'btn_confirm_booking') {
+          const context = conversationContextSchema.parse(conversation.contextData || {});
+          if (context.bookingIntentId) {
+            const bookingIntent = await prisma.bookingIntent.findUnique({
+              where: { id: context.bookingIntentId },
+            });
+            if (bookingIntent?.bookingId) {
+              return this.showAlreadyConfirmed(conversation, bookingIntent.bookingId);
+            }
+          }
+        }
         // Reset and start over
         conversation = await this.updateState(conversation.id, 'GREETING', {});
         return this.handleGreeting(conversation);
@@ -428,6 +480,7 @@ class ConversationService {
 
   /**
    * Handle GREETING state - welcome message with template customization
+   * @deprecated Legacy handler — remove after parity verification gate.
    */
   private async handleGreeting(
     conversation: ConversationWithRelations
@@ -463,6 +516,7 @@ class ConversationService {
 
   /**
    * Handle AWAITING_ROUTING_CODE state
+   * @deprecated Legacy handler — remove after parity verification gate.
    */
   private async handleRoutingCode(
     conversation: ConversationWithRelations,
@@ -569,6 +623,7 @@ class ConversationService {
 
   /**
    * Show service selection list with template-based terminology
+   * @deprecated Legacy handler — remove after parity verification gate.
    */
   private async showServiceSelection(
     conversation: ConversationWithRelations
@@ -639,6 +694,7 @@ class ConversationService {
 
   /**
    * Handle SERVICE_SELECTION state
+   * @deprecated Legacy handler — remove after parity verification gate.
    */
   private async handleServiceSelection(
     conversation: ConversationWithRelations,
@@ -690,13 +746,31 @@ class ConversationService {
 
   /**
    * Show time selection options
+   * @deprecated Legacy handler — remove after parity verification gate.
    */
   private async showTimeSelection(
     conversation: ConversationWithRelations,
     serviceName: string
   ): Promise<ConversationResponse> {
-    // Generate available time slots for today and tomorrow
-    const slots = this.generateTimeSlots();
+    const context = conversationContextSchema.parse(conversation.contextData || {});
+    const slots = await this.generateAvailableTimeSlots(
+      conversation.businessId!,
+      context.totalDuration || 60
+    );
+
+    if (slots.length === 0) {
+      return {
+        conversationId: conversation.id,
+        state: 'TIME_SELECTION',
+        message: {
+          type: 'text',
+          body: {
+            text: 'No slots are available right now. Please try again later or contact the business directly.',
+          },
+        },
+        contextData: context,
+      };
+    }
 
     const rows: InteractiveListRow[] = slots.map(slot => ({
       id: `timeslot_${slot.value}`,
@@ -725,6 +799,7 @@ class ConversationService {
 
   /**
    * Handle TIME_SELECTION state
+   * @deprecated Legacy handler — remove after parity verification gate.
    */
   private async handleTimeSelection(
     conversation: ConversationWithRelations,
@@ -745,9 +820,43 @@ class ConversationService {
       return this.showTimeSelection(conversation, 'your service');
     }
 
+    const context = conversationContextSchema.parse(conversation.contextData || {});
+    if (!conversation.businessId || !context.selectedServiceIds?.length || !context.totalDuration) {
+      return this.showServiceSelection(conversation);
+    }
+
+    const selectedStart = new Date(selectedTime);
+    if (Number.isNaN(selectedStart.getTime())) {
+      return this.showTimeSelection(conversation, 'your service');
+    }
+
+    const selectedEnd = availabilityService.calculateEndTime(selectedStart, context.totalDuration);
+    const availability = await availabilityService.getAvailabilityWithSuggestions(
+      conversation.businessId,
+      selectedStart,
+      selectedEnd
+    );
+
+    if (!availability.available) {
+      return {
+        conversationId: conversation.id,
+        state: 'TIME_SELECTION',
+        message: {
+          type: 'text',
+          body: {
+            text: 'That slot is no longer available. Please choose another time.',
+          },
+        },
+        contextData: context,
+      };
+    }
+
+    const bookingIntent = await this.createBookingIntent(conversation, selectedTime, context);
+
     // Update context with selected time
     const updated = await this.updateState(conversation.id, 'CONFIRMATION', {
       requestedTime: selectedTime,
+      bookingIntentId: bookingIntent.id,
     });
 
     return this.showConfirmation(updated);
@@ -755,6 +864,7 @@ class ConversationService {
 
   /**
    * Show booking confirmation
+   * @deprecated Legacy handler — remove after parity verification gate.
    */
   private async showConfirmation(
     conversation: ConversationWithRelations
@@ -801,6 +911,7 @@ class ConversationService {
 
   /**
    * Handle CONFIRMATION state
+   * @deprecated Legacy handler — remove after parity verification gate.
    */
   private async handleConfirmation(
     conversation: ConversationWithRelations,
@@ -819,12 +930,23 @@ class ConversationService {
                      messageText.toLowerCase().includes('no');
 
     if (isCancel) {
+      if (context.bookingIntentId) {
+        await prisma.bookingIntent.updateMany({
+          where: {
+            id: context.bookingIntentId,
+            status: 'PENDING',
+          },
+          data: { status: 'CANCELLED' },
+        });
+      }
+
       // Reset to service selection
       const updated = await this.updateState(conversation.id, 'SERVICE_SELECTION', {
         selectedServiceIds: undefined,
         totalDuration: undefined,
         totalPrice: undefined,
         requestedTime: undefined,
+        bookingIntentId: undefined,
       });
       return this.showServiceSelection(updated);
     }
@@ -832,6 +954,42 @@ class ConversationService {
     if (isConfirm) {
       // Create the booking
       try {
+        const bookingIntent = context.bookingIntentId
+          ? await prisma.bookingIntent.findUnique({ where: { id: context.bookingIntentId } })
+          : null;
+
+        if (!bookingIntent) {
+          return this.showTimeSelection(conversation, 'your service');
+        }
+
+        if (bookingIntent.status === 'CONFIRMED' && bookingIntent.bookingId) {
+          return this.showAlreadyConfirmed(conversation, bookingIntent.bookingId);
+        }
+
+        if (bookingIntent.status !== 'PENDING' || bookingIntent.expiresAt <= new Date()) {
+          await prisma.bookingIntent.updateMany({
+            where: { id: bookingIntent.id, status: 'PENDING' },
+            data: { status: 'EXPIRED' },
+          });
+
+          const updated = await this.updateState(conversation.id, 'TIME_SELECTION', {
+            requestedTime: undefined,
+            bookingIntentId: undefined,
+          });
+
+          return {
+            conversationId: updated.id,
+            state: 'TIME_SELECTION',
+            message: {
+              type: 'text',
+              body: {
+                text: 'This booking hold expired. Please choose a fresh time slot.',
+              },
+            },
+            contextData: conversationContextSchema.parse(updated.contextData || {}),
+          };
+        }
+
         // Get business owner for booking creation
         const business = await prisma.business.findUnique({
           where: { id: conversation.businessId! },
@@ -854,15 +1012,23 @@ class ConversationService {
           customerId: customer.id,
           businessCustomerId: businessCustomer.id,
           serviceIds: context.selectedServiceIds || [],
-          scheduledAt: context.requestedTime || new Date().toISOString(),
+          scheduledAt: bookingIntent.requestedTime.toISOString(),
           source: 'whatsapp',
+        });
+
+        await prisma.bookingIntent.update({
+          where: { id: bookingIntent.id },
+          data: {
+            status: 'CONFIRMED',
+            bookingId: booking.id,
+          },
         });
 
         // Update conversation to completed
         const updated = await this.updateState(conversation.id, 'COMPLETED');
 
-        const formattedTime = context.requestedTime 
-          ? new Date(context.requestedTime).toLocaleString('en-IN', {
+        const formattedTime = bookingIntent.requestedTime
+          ? bookingIntent.requestedTime.toLocaleString('en-IN', {
               dateStyle: 'medium',
               timeStyle: 'short',
             })
@@ -911,9 +1077,80 @@ class ConversationService {
     return this.showConfirmation(conversation);
   }
 
+  private async createBookingIntent(
+    conversation: ConversationWithRelations,
+    selectedTime: string,
+    context: ConversationContextType
+  ) {
+    const serviceIds = [...(context.selectedServiceIds || [])].sort();
+    const requestedTime = new Date(selectedTime);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const idempotencyKey = [
+      conversation.id,
+      serviceIds.join(','),
+      requestedTime.toISOString(),
+    ].join(':');
+
+    return prisma.bookingIntent.upsert({
+      where: { idempotencyKey },
+      update: {
+        status: 'PENDING',
+        requestedTime,
+        totalDuration: context.totalDuration || 0,
+        totalPrice: context.totalPrice || 0,
+        expiresAt,
+      },
+      create: {
+        conversationId: conversation.id,
+        businessId: conversation.businessId!,
+        customerPhone: conversation.customerPhone,
+        serviceIds,
+        requestedTime,
+        totalDuration: context.totalDuration || 0,
+        totalPrice: context.totalPrice || 0,
+        idempotencyKey,
+        expiresAt,
+      },
+    });
+  }
+
+  private async showAlreadyConfirmed(
+    conversation: ConversationWithRelations,
+    bookingId: string
+  ): Promise<ConversationResponse> {
+    const businessName = conversation.business?.name || 'the business';
+    const updated = await this.updateState(conversation.id, 'COMPLETED');
+
+    return {
+      conversationId: updated.id,
+      state: 'COMPLETED',
+      message: {
+        type: 'button',
+        header: { type: 'text', text: 'Booking Already Confirmed' },
+        body: {
+          text: `Your booking at ${businessName} is already confirmed.\n\nBooking ID: ${bookingId.slice(-8).toUpperCase()}`,
+        },
+        action: {
+          buttons: [
+            { type: 'reply', reply: { id: 'btn_new_booking', title: 'New Booking' } },
+          ],
+        },
+      },
+      contextData: conversationContextSchema.parse(updated.contextData || {}),
+    };
+  }
+
   // ============================================
   // HELPER METHODS
   // ============================================
+
+  private compactContext(context: Record<string, unknown>): ConversationContextType {
+    const compacted = Object.fromEntries(
+      Object.entries(context).filter(([, value]) => value !== undefined)
+    );
+
+    return conversationContextSchema.parse(compacted);
+  }
 
   /**
    * Normalize phone number to E.164 format
@@ -992,8 +1229,14 @@ class ConversationService {
 
   /**
    * Generate available time slots
+   * @deprecated Legacy slot generation — remove after parity verification gate.
+   * The Flow_Engine's time_picker node uses bulk availability (getBulkAvailabilityData)
+   * instead of this per-slot query loop.
    */
-  private generateTimeSlots(): Array<{ value: string; label: string; date: string }> {
+  private async generateAvailableTimeSlots(
+    businessId: string,
+    durationMinutes: number
+  ): Promise<Array<{ value: string; label: string; date: string }>> {
     const slots: Array<{ value: string; label: string; date: string }> = [];
     const now = new Date();
     
@@ -1012,6 +1255,16 @@ class ConversationService {
 
         const slotDate = new Date(date);
         slotDate.setHours(hour, 0, 0, 0);
+        const slotEnd = availabilityService.calculateEndTime(slotDate, durationMinutes);
+        const availability = await availabilityService.getAvailabilityWithSuggestions(
+          businessId,
+          slotDate,
+          slotEnd
+        );
+
+        if (!availability.available) {
+          continue;
+        }
 
         const timeLabel = slotDate.toLocaleTimeString('en-IN', { 
           hour: 'numeric', 

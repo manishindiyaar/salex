@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useBusinessStore } from '@/store/businessStore';
 import { apiClient } from '@/services/apiClient';
 import { Card, CardHeader, CardBody, CardFooter, Table, Badge, Button, Input, Modal, Alert } from '@/components';
-import { Search, ChevronLeft, ChevronRight, Eye, Download } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Eye, Download, Plus } from 'lucide-react';
+import { CreateBusinessModal } from '@/components/business/CreateBusinessModal';
 
 export const BusinessesPage: React.FC = () => {
   const navigate = useNavigate();
@@ -32,6 +33,9 @@ export const BusinessesPage: React.FC = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [businessToToggle, setBusinessToToggle] = useState<any>(null);
   const [statusReason, setStatusReason] = useState('');
+
+  // Create Business Modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Data Export
   const [exporting, setExporting] = useState(false);
@@ -206,9 +210,14 @@ export const BusinessesPage: React.FC = () => {
           <p className="font-mono text-[10px] uppercase tracking-widest mb-1" style={{ color: '#A8A6B0' }}>Businesses</p>
           <h1 className="font-serif text-[28px] leading-tight" style={{ color: '#03031F', fontWeight: 400 }}>All Businesses</h1>
         </div>
-        <Button variant="secondary" onClick={handleExport} isLoading={exporting} leftIcon={<Download size={15} />}>
-          Export CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={handleExport} isLoading={exporting} leftIcon={<Download size={15} />}>
+            Export CSV
+          </Button>
+          <Button variant="primary" onClick={() => setShowCreateModal(true)} leftIcon={<Plus size={15} />}>
+            Create Business
+          </Button>
+        </div>
       </div>
 
       {/* Search & Filters */}
@@ -382,6 +391,25 @@ export const BusinessesPage: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Create Business Modal */}
+      <CreateBusinessModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          const params: any = {
+            page: 1,
+            limit: pagination.limit,
+            search: searchTerm || undefined,
+            category: filterCategory || undefined,
+            status: filterSubStatus || undefined,
+            plan: filterPlan || undefined,
+          };
+          if (filterStatus === 'active') params.isActive = true;
+          if (filterStatus === 'inactive') params.isActive = false;
+          void fetchBusinesses(params);
+        }}
+      />
     </div>
   );
 };

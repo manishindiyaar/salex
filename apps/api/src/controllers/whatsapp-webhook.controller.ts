@@ -1,11 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { getConfig, isProduction } from '../config';
-import { conversationService } from '../services/conversation.service';
 import { webhookEnhancerService, WhatsAppWebhookPayload } from '../services/webhook-enhancer.service';
 import { prisma } from '@salex/shared-types';
-import { whatsappMessageAuditService } from '../services/whatsapp-message-audit.service';
-import { whatsappService } from '../services/whatsapp.service';
 import { whatsappSignatureService } from '../services/whatsapp-signature.service';
+import { whatsappInboundEventService } from '../services/whatsapp-inbound-event.service';
+import { whatsappChannelService } from '../services/whatsapp-channel.service';
 import { logger } from '../utils/logger';
 
 class WhatsAppWebhookController {
@@ -34,23 +33,6 @@ class WhatsAppWebhookController {
   async receive(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const config = getConfig();
-
-      if (isProduction() || config.whatsappAppSecret) {
-        const signature = req.headers['x-hub-signature-256'];
-        const signatureHeader = Array.isArray(signature) ? signature[0] : signature;
-        const isValidSignature = whatsappSignatureService.verify(
-          req.rawBody,
-          signatureHeader,
-          config.whatsappAppSecret
-        );
-
-        if (!isValidSignature) {
-          logger.warn({ hasSignature: Boolean(signatureHeader) }, 'Rejected WhatsApp webhook with invalid signature');
-          res.sendStatus(403);
-          return;
-        }
-      }
-
       const payload = req.body as WhatsAppWebhookPayload;
 
       if (!webhookEnhancerService.isValidWebhookPayload(payload)) {
@@ -66,6 +48,50 @@ class WhatsAppWebhookController {
 
       const parsed = webhookEnhancerService.parseWebhookPayload(payload);
 
+      // Determine if this is a dedicated channel to use per-business appSecret
+      let appSecretForVerification = config.whatsappAppSecret;
+      let businessId: string | undefined;
+
+      if (parsed?.phoneNumberId) {
+        const channel = await prisma.whatsAppChannel.findUnique({
+          where: { phoneNumberId: parsed.phoneNumberId },
+        });
+
+        if (channel?.businessId && channel.mode === 'DEDICATED' && channel.status === 'CONNECTED') {
+          businessId = channel.businessId;
+
+          // Try to get per-business appSecret for signature verification
+          try {
+            const creds = await whatsappChannelService.getCredentials(channel.businessId);
+            if (creds?.appSecret) {
+              appSecretForVerification = creds.appSecret;
+            }
+          } catch (err) {
+            logger.warn(
+              { businessId: channel.businessId, error: err },
+              'Failed to get per-business appSecret for signature verification; using platform secret'
+            );
+          }
+        }
+      }
+
+      // Signature verification
+      if (isProduction() || appSecretForVerification) {
+        const signature = req.headers['x-hub-signature-256'];
+        const signatureHeader = Array.isArray(signature) ? signature[0] : signature;
+        const isValidSignature = whatsappSignatureService.verify(
+          req.rawBody,
+          signatureHeader,
+          appSecretForVerification
+        );
+
+        if (!isValidSignature) {
+          logger.warn({ hasSignature: Boolean(signatureHeader) }, 'Rejected WhatsApp webhook with invalid signature');
+          res.sendStatus(401);
+          return;
+        }
+      }
+
       if (!parsed) {
         logger.info('Ignoring WhatsApp status-only webhook');
         res.sendStatus(200);
@@ -76,75 +102,38 @@ class WhatsAppWebhookController {
         customerPhone: parsed.customerPhone,
         messageType: parsed.messageType,
         messageId: parsed.messageId,
-      }, 'Processing WhatsApp webhook message');
+      }, 'Storing WhatsApp webhook message');
 
-      if (await whatsappMessageAuditService.hasMessage(parsed.messageId)) {
-        logger.info({ messageId: parsed.messageId }, 'Ignoring duplicate WhatsApp webhook message');
-        res.sendStatus(200);
-        return;
-      }
-
-      // Find associated business by WhatsApp channel
-      let businessId: string | undefined;
-      let outboundPhoneNumberId = parsed.phoneNumberId;
-      if (parsed.phoneNumberId) {
+      // If we haven't resolved businessId yet (non-dedicated or no phoneNumberId match)
+      if (!businessId && parsed.phoneNumberId) {
         const channel = await prisma.whatsAppChannel.findUnique({
           where: { phoneNumberId: parsed.phoneNumberId },
         });
-        if (channel?.businessId) {
+        if (channel?.businessId && channel.mode === 'DEDICATED') {
           businessId = channel.businessId;
-          outboundPhoneNumberId = channel.phoneNumberId;
           await prisma.whatsAppChannel.update({
             where: { id: channel.id },
             data: { lastInboundAt: new Date() },
           });
+        } else {
+          logger.warn(
+            { phoneNumberId: parsed.phoneNumberId },
+            'Inbound phone_number_id did not match any registered DEDICATED WhatsAppChannel; routing to shared-number path'
+          );
         }
+      } else if (businessId) {
+        // Update lastInboundAt for the dedicated channel
+        await prisma.whatsAppChannel.updateMany({
+          where: { businessId, mode: 'DEDICATED' },
+          data: { lastInboundAt: new Date() },
+        });
       }
 
-      const response = await conversationService.processMessage(
-        parsed.customerPhone,
-        parsed.messageText || parsed.interactiveReply?.title || '',
-        parsed.interactiveReply,
-        businessId
-      );
-
-      await whatsappMessageAuditService.storeInbound({
-        conversationId: response.conversationId,
-        whatsappMessageId: parsed.messageId,
-        messageType: parsed.messageType,
-        content: {
-          parsed,
-          payload,
-        },
+      await whatsappInboundEventService.store({
+        parsed,
+        payload,
+        businessId,
       });
-
-      try {
-        const sendResult = await whatsappService.sendMessage(parsed.customerPhone, response.message, {
-          phoneNumberId: outboundPhoneNumberId,
-        });
-
-        await whatsappMessageAuditService.storeOutbound({
-          conversationId: response.conversationId,
-          whatsappMessageId: sendResult.messages?.[0]?.id,
-          message: response.message,
-          status: 'sent',
-        });
-
-        if (businessId) {
-          await prisma.whatsAppChannel.updateMany({
-            where: { businessId },
-            data: { lastOutboundAt: new Date() },
-          });
-        }
-      } catch (error) {
-        await whatsappMessageAuditService.storeOutbound({
-          conversationId: response.conversationId,
-          message: response.message,
-          status: 'failed',
-          error,
-        });
-        logger.error({ error, conversationId: response.conversationId }, 'Failed to send WhatsApp response');
-      }
 
       res.sendStatus(200);
     } catch (error) {

@@ -45,7 +45,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   
   // Get auth state from Zustand store
-  const { isAuthenticated, isHydrated, clearAuth } = useAuthStore();
+  const { isAuthenticated, isHydrated, user, clearAuth } = useAuthStore();
   const { setupAppStateListener } = useBusinessStore();
 
   // Set up app state listener for business data refresh
@@ -66,6 +66,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('🔐 Auth store hydrated, isAuthenticated:', isAuthenticated);
 
       if (isAuthenticated) {
+        if (user?.mustChangePassword) {
+          console.log('🔐 Password change required before entering app');
+          setIsOnboarded(false);
+          setIsLoadingAuth(false);
+          return;
+        }
+
         // User has token, check if they have a business
         console.log('🔍 Checking if business exists...');
         const hasExistingBusiness = await checkBusinessExists();
@@ -79,7 +86,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     initializeAuth();
-  }, [isHydrated, isAuthenticated]);
+  }, [isHydrated, isAuthenticated, user?.mustChangePassword]);
 
   // Check if business exists via API
   const checkBusinessExists = async (): Promise<boolean> => {
@@ -89,9 +96,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const business = await businessService.getBusinessMe();
       
       if (business && business.id) {
-        await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-        console.log('✅ Business exists - user is onboarded:', business.id);
-        return true;
+        if (business.onboardingCompleted === true) {
+          await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+          console.log('✅ Business onboarding complete:', business.id);
+          return true;
+        }
+
+        await AsyncStorage.removeItem(ONBOARDING_KEY);
+        console.log('🚀 Business exists but onboarding is pending:', business.id);
+        return false;
       }
       return false;
     } catch (error: any) {

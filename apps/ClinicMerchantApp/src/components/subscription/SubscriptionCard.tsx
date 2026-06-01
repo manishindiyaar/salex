@@ -5,9 +5,12 @@
  */
 
 import React from 'react';
+import type { ComponentProps } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Icon from '@expo/vector-icons/Feather';
 import { Colors, Spacing, Typography, BorderRadius } from '../../theme/config';
+
+type FeatherIconName = ComponentProps<typeof Icon>['name'];
 
 export interface SubscriptionInfo {
   plan: 'BASIC' | 'PRO' | 'CUSTOM';
@@ -22,7 +25,12 @@ interface SubscriptionCardProps {
   onUpgrade?: () => void;
 }
 
-const PLAN_DETAILS = {
+const PLAN_DETAILS: Record<SubscriptionInfo['plan'], {
+  name: string;
+  icon: FeatherIconName;
+  color: string;
+  features: string[];
+}> = {
   BASIC: {
     name: 'Basic',
     icon: 'box',

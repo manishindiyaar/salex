@@ -7,6 +7,10 @@
 
 import { z } from 'zod';
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://salex-admin-dashboard.vercel.app',
+];
+
 const configSchema = z.object({
   // Server
   nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
@@ -16,6 +20,14 @@ const configSchema = z.object({
   enableAuth: z.preprocess(
     (val) => val === undefined ? true : val === 'true' || val === true,
     z.boolean().default(true)
+  ),
+  allowedOrigins: z.preprocess(
+    (val) => {
+      if (typeof val !== 'string') return DEFAULT_ALLOWED_ORIGINS;
+      const origins = val.split(',').map((origin) => origin.trim()).filter(Boolean);
+      return Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, ...origins]));
+    },
+    z.array(z.string().url()).default(DEFAULT_ALLOWED_ORIGINS)
   ),
 
   // Supabase Cloud Database
@@ -33,10 +45,6 @@ const configSchema = z.object({
   twilioAuthToken: z.string().optional(),
   twilioVerifyServiceSid: z.string().optional(),
 
-  // Development OTP Bypass
-  devPhoneWhitelist: z.array(z.string()).default([]),
-  devMagicOtp: z.string().default('123456'),
-
   // WhatsApp
   whatsappAppSecret: z.string().optional(),
   whatsappAccessToken: z.string().optional(),
@@ -44,8 +52,25 @@ const configSchema = z.object({
   whatsappVerifyToken: z.string().optional(),
   whatsappGraphApiVersion: z.string().default('v25.0'),
   whatsappMode: z.enum(['production', 'simulator']).default('simulator'),
+  whatsappDbWorkersEnabled: z.preprocess(
+    (val) => val === undefined ? true : val === 'true' || val === true,
+    z.boolean().default(true)
+  ),
+
+  // Channel Encryption
+  channelEncryptionKey: z.string().length(64).optional(), // 32 bytes hex for AES-256
+
+  // Flow Engine
+  flowEngineGlobalCutover: z.preprocess(
+    (val) => val === undefined ? false : val === 'true' || val === true,
+    z.boolean().default(false)
+  ),
 
   // Simulator
+  enableSimulatorRoutes: z.preprocess(
+    (val) => val === undefined ? false : val === 'true' || val === true,
+    z.boolean().default(false)
+  ),
   simulatorDefaultBusinessId: z.string().optional(),
   webhookBaseUrl: z.string().default('http://localhost:3001'),
 });
@@ -57,6 +82,7 @@ function loadConfig(): AppConfig {
     nodeEnv: process.env.NODE_ENV,
     port: process.env.PORT,
     enableAuth: process.env.ENABLE_AUTH,
+    allowedOrigins: process.env.ALLOWED_ORIGINS,
 
     databaseUrl: process.env.DATABASE_URL,
     directUrl: process.env.DIRECT_URL,
@@ -70,17 +96,20 @@ function loadConfig(): AppConfig {
     twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
     twilioVerifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID,
 
-    devPhoneWhitelist: process.env.DEV_PHONE_WHITELIST?.split(',').filter(Boolean) || [],
-    devMagicOtp: process.env.DEV_MAGIC_OTP,
-
     whatsappAppSecret: process.env.WHATSAPP_APP_SECRET,
     whatsappAccessToken: process.env.WHATSAPP_ACCESS_TOKEN,
     whatsappPhoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
     whatsappVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
     whatsappGraphApiVersion: process.env.WHATSAPP_GRAPH_API_VERSION,
     whatsappMode: process.env.WHATSAPP_MODE,
+    whatsappDbWorkersEnabled: process.env.WHATSAPP_DB_WORKERS_ENABLED,
+
+    channelEncryptionKey: process.env.CHANNEL_ENCRYPTION_KEY,
+
+    flowEngineGlobalCutover: process.env.FLOW_ENGINE_GLOBAL_CUTOVER,
 
     simulatorDefaultBusinessId: process.env.SIMULATOR_DEFAULT_BUSINESS_ID,
+    enableSimulatorRoutes: process.env.ENABLE_SIMULATOR_ROUTES,
     webhookBaseUrl: process.env.WEBHOOK_BASE_URL,
   };
 
@@ -118,6 +147,7 @@ export function isSimulatorMode(): boolean {
   return getConfig().whatsappMode === 'simulator';
 }
 
-export function isPhoneWhitelisted(phone: string): boolean {
-  return getConfig().devPhoneWhitelist.includes(phone);
+export function areSimulatorRoutesEnabled(): boolean {
+  const config = getConfig();
+  return isDevelopment() || config.enableSimulatorRoutes;
 }

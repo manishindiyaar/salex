@@ -6,6 +6,7 @@
 
 // User & Auth
 export * from './user.schema';
+export * from './auth.schema';
 
 // Customer
 export * from './customer.schema';
@@ -30,3 +31,6 @@ export * from './staff.schema';
 
 // Availability
 export * from './availability.schema';
+
+// Flow
+export * from './flow.schema';
