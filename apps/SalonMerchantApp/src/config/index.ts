@@ -18,9 +18,13 @@ export const AUTH_CONFIG = {
 } as const;
 
 // API Configuration
+// Use your Mac's LAN IP for dev so physical devices on the same WiFi can reach the API.
+// Update LAN_IP if your network changes.
+const LAN_IP = '192.168.1.10';
+
 export const API_CONFIG = {
   BASE_URL: isDev 
-    ? 'http://localhost:3001/api/v1'
+    ? `http://${LAN_IP}:3001/api/v1`
     : 'https://salex-api-staging-staging.up.railway.app/api/v1',
   
   TIMEOUT_MS: 10000,
