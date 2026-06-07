@@ -7,6 +7,7 @@ import OnboardingNavigator from './OnboardingNavigator';
 import TabNavigator from './TabNavigator';
 import ResourceManagementScreen from '../screens/main/ResourceManagementScreen';
 import StaffManagementScreen from '../screens/main/StaffManagementScreen';
+import LedgerScreen from '../screens/main/LedgerScreen';
 
 type RootStackParamList = {
   Onboarding: undefined;
@@ -14,6 +15,7 @@ type RootStackParamList = {
   MainTabs: undefined;
   ResourceManagement: undefined;
   StaffManagement: undefined;
+  Ledger: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -43,6 +45,13 @@ const MainStack: React.FC = () => {
           headerStyle: { backgroundColor: Colors.BACKGROUND },
           headerTintColor: Colors.TEXT,
           headerShadowVisible: false,
+        }}
+      />
+      <Stack.Screen 
+        name="Ledger" 
+        component={LedgerScreen}
+        options={{
+          headerShown: false,
         }}
       />
     </Stack.Navigator>

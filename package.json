@@ -21,7 +21,7 @@
     "db:push": "pnpm --filter @salex/shared-types db:push",
     "db:generate": "turbo run db:generate --filter=@salex/shared-types",
     "db:studio": "turbo run db:studio --filter=@salex/shared-types",
-    "prepare": "husky install"
+    "prepare": "husky"
   },
   "devDependencies": {
     "axios": "^1.11.0",
