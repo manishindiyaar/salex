@@ -78,6 +78,8 @@ production
 - deployment branches restricted to `staging`;
 - required reviewers optional.
 
+The non-production migration job does not attach to the `staging` GitHub environment. It must run for both `develop` and `staging` pushes, while the `staging` environment itself is branch-restricted to `staging` for actual deployments.
+
 `production`:
 
 - deployment branches restricted to `main`;

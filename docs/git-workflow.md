@@ -179,7 +179,6 @@ Push behavior:
 
 | Push branch | Migration target | Deployment |
 | --- | --- | --- |
-| `develop` | Shared non-production DB | No API deploy |
+| `develop` | Shared non-production DB, no GitHub environment | No API deploy |
 | `staging` | Shared non-production DB | Railway `salex-api-staging` |
 | `main` | Production DB | Railway `salex-api-production` |
-

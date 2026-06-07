@@ -105,7 +105,8 @@ Push to `develop`:
 
 - runs validation,
 - applies committed Prisma migrations to the shared non-production database,
-- does not deploy the API.
+- does not deploy the API,
+- does not use the `staging` GitHub environment because that environment is restricted to the `staging` branch.
 
 Push to `staging`:
 
@@ -171,4 +172,3 @@ Read:
 
 - `docs/git-workflow.md`
 - `docs/deployment-pipeline.md`
-
