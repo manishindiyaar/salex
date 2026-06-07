@@ -1,0 +1,35 @@
+set -eu
+
+protected_branches="develop staging main"
+
+while read -r local_ref local_sha remote_ref remote_sha
+do
+  remote_branch="${remote_ref#refs/heads/}"
+
+  for branch in $protected_branches
+  do
+    if [ "$remote_branch" = "$branch" ]; then
+      echo ""
+      echo "Blocked direct push to protected branch: $branch"
+      echo ""
+      echo "Use the required PR flow instead:"
+      echo "  feature branch -> develop -> staging -> main"
+      echo ""
+      exit 1
+    fi
+  done
+done
+
+echo "Running local pre-push checks..."
+
+if [ "${SALEX_SKIP_PRE_PUSH_CHECKS:-}" = "1" ]; then
+  echo "SALEX_SKIP_PRE_PUSH_CHECKS=1; skipping local checks."
+  exit 0
+fi
+
+pnpm lint
+pnpm type-check
+pnpm test
+pnpm build
+
+echo "Pre-push checks passed."

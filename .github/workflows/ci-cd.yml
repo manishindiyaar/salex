@@ -132,8 +132,8 @@ jobs:
       - name: Trigger Railway staging deploy
         run: |
           if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "RAILWAY_STAGING_TOKEN is not set; skipping deploy."
-            exit 0
+            echo "RAILWAY_STAGING_TOKEN is not set; failing deploy."
+            exit 1
           fi
           npx @railway/cli variable set ALLOWED_ORIGINS=https://salex-admin-dashboard.vercel.app --service salex-api-staging --skip-deploys
           npx @railway/cli redeploy --service salex-api-staging -y
@@ -150,8 +150,8 @@ jobs:
       - name: Trigger Railway production deploy
         run: |
           if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "RAILWAY_PRODUCTION_TOKEN is not set; skipping deploy."
-            exit 0
+            echo "RAILWAY_PRODUCTION_TOKEN is not set; failing deploy."
+            exit 1
           fi
           npx @railway/cli variable set ALLOWED_ORIGINS=https://salex-admin-dashboard.vercel.app --service salex-api-production --skip-deploys
           npx @railway/cli redeploy --service salex-api-production -y

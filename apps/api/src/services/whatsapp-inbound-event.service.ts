@@ -1,3 +1,9 @@
+/**
+ * @deprecated LEGACY — Only used when WHATSAPP_QUEUE_BACKEND=db.
+ * With Redis/BullMQ, the webhook controller enqueues directly to BullMQ
+ * instead of writing to WhatsAppInboundEvent table.
+ */
+
 import { Prisma, prisma } from '@salex/shared-types';
 import type { WhatsAppWebhookPayload } from './webhook-enhancer.service';
 import { logger } from '../utils/logger';

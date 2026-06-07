@@ -35,3 +35,6 @@ export { default as SlotCreatorDrawer } from './SlotCreatorDrawer';
 export type { SlotCreatorDrawerProps } from './SlotCreatorDrawer';
 
 export { BookingDetailDrawer } from './BookingDetailDrawer';
+
+export { RevenueBookingCard } from './RevenueBookingCard';
+export type { RevenueBookingCardProps, RevenueBookingCardData } from './RevenueBookingCard';

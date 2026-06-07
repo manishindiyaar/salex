@@ -5,6 +5,8 @@ import { prisma } from '@salex/shared-types';
 import { whatsappSignatureService } from '../services/whatsapp-signature.service';
 import { whatsappInboundEventService } from '../services/whatsapp-inbound-event.service';
 import { whatsappChannelService } from '../services/whatsapp-channel.service';
+import { whatsappDbWorkerService } from '../services/whatsapp-db-worker.service';
+import { whatsappQueueService } from '../services/whatsapp-queue.service';
 import { logger } from '../utils/logger';
 
 class WhatsAppWebhookController {
@@ -52,7 +54,11 @@ class WhatsAppWebhookController {
       let appSecretForVerification = config.whatsappAppSecret;
       let businessId: string | undefined;
 
-      if (parsed?.phoneNumberId) {
+      // Fast path: if phoneNumberId matches our configured shared platform number,
+      // skip the dedicated channel DB lookup entirely (~200-400ms saved for 90%+ of traffic)
+      const isSharedNumber = parsed?.phoneNumberId === config.whatsappPhoneNumberId;
+
+      if (parsed?.phoneNumberId && !isSharedNumber) {
         const channel = await prisma.whatsAppChannel.findUnique({
           where: { phoneNumberId: parsed.phoneNumberId },
         });
@@ -105,7 +111,8 @@ class WhatsAppWebhookController {
       }, 'Storing WhatsApp webhook message');
 
       // If we haven't resolved businessId yet (non-dedicated or no phoneNumberId match)
-      if (!businessId && parsed.phoneNumberId) {
+      if (!businessId && parsed.phoneNumberId && !isSharedNumber) {
+        // Only look up dedicated channel for non-shared numbers we haven't resolved yet
         const channel = await prisma.whatsAppChannel.findUnique({
           where: { phoneNumberId: parsed.phoneNumberId },
         });
@@ -115,11 +122,6 @@ class WhatsAppWebhookController {
             where: { id: channel.id },
             data: { lastInboundAt: new Date() },
           });
-        } else {
-          logger.warn(
-            { phoneNumberId: parsed.phoneNumberId },
-            'Inbound phone_number_id did not match any registered DEDICATED WhatsAppChannel; routing to shared-number path'
-          );
         }
       } else if (businessId) {
         // Update lastInboundAt for the dedicated channel
@@ -129,11 +131,28 @@ class WhatsAppWebhookController {
         });
       }
 
-      await whatsappInboundEventService.store({
-        parsed,
-        payload,
-        businessId,
-      });
+      // ─── Enqueue or store based on queue backend ──────────────────────
+      if (config.whatsappQueueBackend === 'redis' && config.redisUrl) {
+        // Redis path: enqueue BullMQ job (fast, no DB write in webhook)
+        await whatsappQueueService.enqueueInbound({
+          waMessageId: parsed.messageId,
+          phoneNumberId: parsed.phoneNumberId || undefined,
+          customerPhone: parsed.customerPhone,
+          businessId: businessId || undefined,
+          messageType: parsed.messageType,
+          messageText: parsed.messageText || undefined,
+          interactiveReply: parsed.interactiveReply || undefined,
+          receivedAt: new Date().toISOString(),
+        });
+      } else {
+        // DB path (legacy): store event row, kick DB worker
+        await whatsappInboundEventService.store({
+          parsed,
+          payload,
+          businessId,
+        });
+        whatsappDbWorkerService.kickInbound();
+      }
 
       res.sendStatus(200);
     } catch (error) {

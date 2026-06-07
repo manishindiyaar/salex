@@ -8,6 +8,7 @@ import 'dotenv/config';
 import { createApp } from './app';
 import { getConfig } from './config';
 import { whatsappDbWorkerService } from './services/whatsapp-db-worker.service';
+import { startWhatsAppWorkers, stopWhatsAppWorkers } from './workers/whatsapp-workers';
 import logger from './utils/logger';
 
 async function main() {
@@ -25,14 +26,26 @@ async function main() {
       logger.info(`🔗 Health check: http://localhost:${config.port}/health`);
     });
 
-    if (config.whatsappDbWorkersEnabled) {
-      whatsappDbWorkerService.start();
+    // Start WhatsApp workers based on configured backend
+    if (config.whatsappWorkersEnabled) {
+      if (config.whatsappQueueBackend === 'redis' && config.redisUrl) {
+        startWhatsAppWorkers();
+        logger.info('📨 Queue backend: Redis (BullMQ)');
+      } else if (config.whatsappDbWorkersEnabled) {
+        whatsappDbWorkerService.start();
+        logger.info('📨 Queue backend: PostgreSQL (DB polling)');
+      }
     }
 
     // Graceful shutdown
     const shutdown = async (signal: string) => {
       logger.info(`${signal} received, shutting down gracefully...`);
-      whatsappDbWorkerService.stop();
+
+      if (config.whatsappQueueBackend === 'redis') {
+        await stopWhatsAppWorkers();
+      } else {
+        whatsappDbWorkerService.stop();
+      }
       
       server.close(() => {
         logger.info('HTTP server closed');

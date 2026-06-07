@@ -68,7 +68,7 @@ export interface WhatsAppMessage {
     body: string;
   };
   interactive?: {
-    type: 'button_reply' | 'list_reply';
+    type: 'button_reply' | 'list_reply' | 'nfm_reply';
     button_reply?: {
       id: string;
       title: string;
@@ -77,6 +77,11 @@ export interface WhatsAppMessage {
       id: string;
       title: string;
       description?: string;
+    };
+    nfm_reply?: {
+      response_json: string; // JSON string containing flow response params
+      body: string;
+      name: string;
     };
   };
 }
@@ -269,6 +274,21 @@ class WebhookEnhancerService {
             title: interactive.list_reply.title,
             description: interactive.list_reply.description,
           };
+        } else if (interactive.nfm_reply) {
+          // WhatsApp Flow completion — parse the response JSON
+          try {
+            const flowResponse = JSON.parse(interactive.nfm_reply.response_json);
+            result.interactiveReply = {
+              type: 'nfm_reply',
+              id: flowResponse.business_id || flowResponse.flow_token || 'flow_complete',
+              title: flowResponse.business_name || 'Flow completed',
+              description: JSON.stringify(flowResponse),
+            };
+            // Also set messageText so downstream can detect flow completion
+            result.messageText = `__FLOW_COMPLETE__:${JSON.stringify(flowResponse)}`;
+          } catch {
+            logger.warn({ nfm_reply: interactive.nfm_reply }, 'Failed to parse Flow nfm_reply response_json');
+          }
         }
       }
 
