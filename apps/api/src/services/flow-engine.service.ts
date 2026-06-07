@@ -45,6 +45,7 @@ import { confirmationHandler } from './flow-handlers/confirmation';
 import { bookingHandler } from './flow-handlers/booking';
 import { flowContextBuilder } from './flow-context-builder.service';
 import { logger } from '../utils/logger';
+import { parseNavAction, NAV, midFlowContextMessage } from './whatsapp-ui.service';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -127,18 +128,82 @@ class FlowEngineService {
       return this.resetToEntry(conversation.id, businessId, normalizedCustomerPhone);
     }
 
+    // 2b. Navigation interceptor — handle start_over and change_salon before state-specific logic
+    const navAction = parseNavAction(interactiveReply?.id, messageText);
+    if (navAction === NAV.START_OVER) {
+      logger.info({ conversationId: conversation.id }, 'Flow engine: start over requested');
+      return this.resetToEntry(conversation.id, businessId, normalizedCustomerPhone);
+    }
+    if (navAction === NAV.CHANGE_SALON) {
+      // Clear business association — conversation service will handle business search
+      await prisma.whatsAppConversation.update({
+        where: { id: conversation.id },
+        data: { businessId: null, state: 'GREETING', flowId: null, flowVersion: null, contextData: {} },
+      });
+      // Return a text message directing to salon search (engine router will pick this up next message)
+      return {
+        conversationId: conversation.id,
+        currentNodeId: 'GREETING',
+        message: { type: 'text', body: { text: '👋 Find your salon\n\nSearch by salon name, area, address, or enter your salon code.' } },
+        context: {},
+        engine: 'flow',
+        complete: false,
+      };
+    }
+
+    // 2c. "hi"/"hello" mid-flow → contextual menu instead of reset
+    if (conversation.state !== ENTRY_SENTINEL && conversation.state !== 'COMPLETED') {
+      const lower = messageText.trim().toLowerCase();
+      if (lower === 'hi' || lower === 'hello' || lower === 'hey') {
+        const contextMsg = midFlowContextMessage({
+          currentStep: conversation.state,
+          businessName: undefined, // flow engine doesn't have business name in memory
+        });
+        return {
+          conversationId: conversation.id,
+          currentNodeId: conversation.state,
+          message: contextMsg,
+          context: (conversation.contextData as FlowContext) || {},
+          engine: 'flow',
+          complete: false,
+        };
+      }
+    }
+
     // 3. Fresh start detection: state === ENTRY_SENTINEL and no flowId → pin active flow, render entry
     if (conversation.state === ENTRY_SENTINEL && !conversation.flowId) {
       return this.handleFreshStart(conversation.id, businessId, normalizedCustomerPhone);
     }
 
-    // 3b. COMPLETED state: previous booking finished, start a new interaction
+    // 3b. COMPLETED state: previous booking finished
     if (conversation.state === 'COMPLETED') {
-      logger.info(
-        { conversationId: conversation.id },
-        'Flow engine: conversation was COMPLETED, resetting for new booking',
-      );
-      return this.resetToEntry(conversation.id, businessId, normalizedCustomerPhone);
+      // If user tapped "Book Again" (start over), reset and start fresh
+      if (interactiveReply?.id === NAV.START_OVER || messageText.trim().toLowerCase() === 'book again') {
+        logger.info(
+          { conversationId: conversation.id },
+          'Flow engine: user requested new booking after completion',
+        );
+        return this.resetToEntry(conversation.id, businessId, normalizedCustomerPhone);
+      }
+
+      // Otherwise show "Booking done, book again?" button
+      return {
+        conversationId: conversation.id,
+        currentNodeId: 'COMPLETED',
+        message: {
+          type: 'button',
+          header: { type: 'text', text: '✅ Booking Done' },
+          body: { text: 'Your appointment is confirmed.\n\nWant to book another appointment?' },
+          action: {
+            buttons: [
+              { type: 'reply', reply: { id: NAV.START_OVER, title: '📅 Book Again' } },
+            ],
+          },
+        },
+        context: (conversation.contextData as FlowContext) || {},
+        engine: 'flow',
+        complete: true,
+      };
     }
 
     // 4. Load pinned flow (flowId + flowVersion); if invalid → reset (Req 14.4 / Property 16)

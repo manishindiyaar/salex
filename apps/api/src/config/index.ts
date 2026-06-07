@@ -7,6 +7,10 @@
 
 import { z } from 'zod';
 
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://salex-admin-dashboard.vercel.app',
+];
+
 const configSchema = z.object({
   // Server
   nodeEnv: z.enum(['development', 'production', 'test']).default('development'),
@@ -19,10 +23,11 @@ const configSchema = z.object({
   ),
   allowedOrigins: z.preprocess(
     (val) => {
-      if (typeof val !== 'string') return [];
-      return val.split(',').map((origin) => origin.trim()).filter(Boolean);
+      if (typeof val !== 'string') return DEFAULT_ALLOWED_ORIGINS;
+      const origins = val.split(',').map((origin) => origin.trim()).filter(Boolean);
+      return Array.from(new Set([...DEFAULT_ALLOWED_ORIGINS, ...origins]));
     },
-    z.array(z.string().url()).default([])
+    z.array(z.string().url()).default(DEFAULT_ALLOWED_ORIGINS)
   ),
 
   // Supabase Cloud Database
@@ -50,6 +55,32 @@ const configSchema = z.object({
   whatsappDbWorkersEnabled: z.preprocess(
     (val) => val === undefined ? true : val === 'true' || val === true,
     z.boolean().default(true)
+  ),
+
+  // WhatsApp Flows (Meta Business Selection Flow)
+  whatsappFlowId: z.string().optional(), // WHATSAPP_BUSINESS_SELECTION_FLOW_ID
+  whatsappFlowMode: z.enum(['draft', 'published']).default('draft'),
+  whatsappFlowPrivateKey: z.string().optional(), // PEM-encoded RSA private key for data exchange encryption
+  whatsappFlowTokenSecret: z.string().optional(), // Secret to generate/validate flow tokens
+  whatsappFlowEndpointEnabled: z.preprocess(
+    (val) => val === undefined ? false : val === 'true' || val === true,
+    z.boolean().default(false)
+  ),
+
+  // Redis / Queue Backend
+  redisUrl: z.string().optional(), // REDIS_URL (Railway)
+  whatsappQueueBackend: z.enum(['redis', 'db']).default('db'),
+  whatsappWorkersEnabled: z.preprocess(
+    (val) => val === undefined ? true : val === 'true' || val === true,
+    z.boolean().default(true)
+  ),
+  whatsappInboundConcurrency: z.preprocess(
+    (val) => val === undefined ? 10 : Number(val),
+    z.number().int().min(1).default(10)
+  ),
+  whatsappOutboundConcurrency: z.preprocess(
+    (val) => val === undefined ? 10 : Number(val),
+    z.number().int().min(1).default(10)
   ),
 
   // Channel Encryption
@@ -99,6 +130,18 @@ function loadConfig(): AppConfig {
     whatsappMode: process.env.WHATSAPP_MODE,
     whatsappDbWorkersEnabled: process.env.WHATSAPP_DB_WORKERS_ENABLED,
 
+    whatsappFlowId: process.env.WHATSAPP_BUSINESS_SELECTION_FLOW_ID,
+    whatsappFlowMode: process.env.WHATSAPP_BUSINESS_SELECTION_FLOW_MODE,
+    whatsappFlowPrivateKey: process.env.WHATSAPP_FLOW_PRIVATE_KEY,
+    whatsappFlowTokenSecret: process.env.WHATSAPP_FLOW_TOKEN_SECRET,
+    whatsappFlowEndpointEnabled: process.env.WHATSAPP_FLOW_ENDPOINT_ENABLED,
+
+    redisUrl: process.env.REDIS_URL,
+    whatsappQueueBackend: process.env.WHATSAPP_QUEUE_BACKEND,
+    whatsappWorkersEnabled: process.env.WHATSAPP_WORKERS_ENABLED,
+    whatsappInboundConcurrency: process.env.WHATSAPP_INBOUND_CONCURRENCY,
+    whatsappOutboundConcurrency: process.env.WHATSAPP_OUTBOUND_CONCURRENCY,
+
     channelEncryptionKey: process.env.CHANNEL_ENCRYPTION_KEY,
 
     flowEngineGlobalCutover: process.env.FLOW_ENGINE_GLOBAL_CUTOVER,
@@ -145,4 +188,9 @@ export function isSimulatorMode(): boolean {
 export function areSimulatorRoutesEnabled(): boolean {
   const config = getConfig();
   return isDevelopment() || config.enableSimulatorRoutes;
+}
+
+export function isWhatsAppFlowEnabled(): boolean {
+  const config = getConfig();
+  return Boolean(config.whatsappFlowId && config.whatsappFlowEndpointEnabled);
 }

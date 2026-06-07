@@ -165,6 +165,32 @@ const ProfileScreen: React.FC = () => {
     ?.filter((b: any) => b.status === 'COMPLETED')
     .reduce((sum: number, b: any) => sum + (Number(b.totalPrice) || 0), 0) || 0;
 
+  // Ledger summary (this month)
+  const ledgerSummary = useMemo(() => {
+    if (!bookings || bookings.length === 0) return { earned: 0, count: 0, cash: 0, upi: 0, hasPaymentData: false };
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    let earned = 0;
+    let count = 0;
+    let cash = 0;
+    let upi = 0;
+    let tracked = 0;
+
+    bookings.forEach((b: any) => {
+      if (b.status !== 'COMPLETED') return;
+      const d = new Date(b.scheduledAt);
+      if (d < monthStart) return;
+      const amt = Number(b.totalPrice) || 0;
+      earned += amt;
+      count += 1;
+      const pm = (b.paymentMode || b.paymentMethod || '').toUpperCase();
+      if (pm === 'CASH') { cash += amt; tracked++; }
+      else if (pm === 'UPI' || pm === 'OTHER') { upi += amt; tracked++; }
+    });
+
+    return { earned, count, cash, upi, hasPaymentData: tracked > 0 };
+  }, [bookings]);
+
   const handleSaveBusinessInfo = async () => {
     if (!business || !editForm.name.trim()) return;
     
@@ -440,6 +466,53 @@ const ProfileScreen: React.FC = () => {
             <Text style={styles.statLabel}>Revenue</Text>
           </View>
         </View>
+
+        {/* Salon Ledger Entry Card */}
+        <TouchableOpacity
+          style={styles.ledgerCard}
+          activeOpacity={0.8}
+          onPress={() => {
+            haptics.light();
+            navigation.navigate('Ledger');
+          }}
+        >
+          <View style={styles.ledgerHeader}>
+            <View style={styles.ledgerIconWrap}>
+              <Icon name="book-open" size={20} color={Colors.SALEX_GREEN} />
+            </View>
+            <View style={styles.ledgerTitleWrap}>
+              <Text style={styles.ledgerTitle}>Salon Ledger</Text>
+              <Text style={styles.ledgerSubtitle}>Monthly earnings, payments, staff and service history</Text>
+            </View>
+            <Icon name="chevron-right" size={20} color={Colors.TEXT_TERTIARY} />
+          </View>
+          <View style={styles.ledgerStats}>
+            <View style={styles.ledgerStatBlock}>
+              <Text style={styles.ledgerStatValue}>₹{ledgerSummary.earned.toLocaleString('en-IN')}</Text>
+              <Text style={styles.ledgerStatLabel}>This Month</Text>
+            </View>
+            <View style={styles.ledgerStatBlock}>
+              <Text style={styles.ledgerStatValue}>{ledgerSummary.count}</Text>
+              <Text style={styles.ledgerStatLabel}>Completed</Text>
+            </View>
+            {ledgerSummary.hasPaymentData && (
+              <>
+                <View style={styles.ledgerStatBlock}>
+                  <Text style={styles.ledgerStatValue}>₹{ledgerSummary.cash.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.ledgerStatLabel}>Cash</Text>
+                </View>
+                <View style={styles.ledgerStatBlock}>
+                  <Text style={styles.ledgerStatValue}>₹{ledgerSummary.upi.toLocaleString('en-IN')}</Text>
+                  <Text style={styles.ledgerStatLabel}>UPI/Bank</Text>
+                </View>
+              </>
+            )}
+          </View>
+          <View style={styles.ledgerCta}>
+            <Text style={styles.ledgerCtaText}>View Ledger</Text>
+            <Icon name="arrow-right" size={14} color={Colors.SALEX_GREEN} />
+          </View>
+        </TouchableOpacity>
 
         {/* Subscription Card */}
         {subscriptionInfo && (
@@ -737,6 +810,78 @@ const styles = StyleSheet.create({
   versionText: {
     ...Typography.Caption,
     color: Colors.TEXT_TERTIARY,
+  },
+  // Ledger Card styles
+  ledgerCard: {
+    marginHorizontal: Spacing.LG,
+    marginBottom: Spacing.LG,
+    backgroundColor: Colors.SURFACE,
+    borderRadius: BorderRadius.LG,
+    padding: Spacing.LG,
+    borderWidth: 1,
+    borderColor: Colors.SALEX_GREEN + '30',
+  },
+  ledgerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ledgerIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.SALEX_GREEN + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: Spacing.MD,
+  },
+  ledgerTitleWrap: {
+    flex: 1,
+  },
+  ledgerTitle: {
+    ...Typography.H4,
+    color: Colors.TEXT,
+  },
+  ledgerSubtitle: {
+    ...Typography.Caption,
+    color: Colors.TEXT_TERTIARY,
+    marginTop: 1,
+  },
+  ledgerStats: {
+    flexDirection: 'row',
+    marginTop: Spacing.MD,
+    paddingTop: Spacing.MD,
+    borderTopWidth: 1,
+    borderTopColor: Colors.BORDER + '60',
+  },
+  ledgerStatBlock: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  ledgerStatValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: 'Inter-Bold',
+    color: Colors.TEXT,
+    fontVariant: ['tabular-nums'],
+  },
+  ledgerStatLabel: {
+    ...Typography.Caption,
+    color: Colors.TEXT_TERTIARY,
+    marginTop: 1,
+    fontSize: 10,
+  },
+  ledgerCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.MD,
+    paddingTop: Spacing.SM,
+    gap: Spacing.XS,
+  },
+  ledgerCtaText: {
+    ...Typography.Body2,
+    color: Colors.SALEX_GREEN,
+    fontWeight: '600',
   },
   // Modal styles
   modalContainer: {

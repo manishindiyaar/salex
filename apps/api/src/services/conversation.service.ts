@@ -52,9 +52,12 @@ import { logger } from '../utils/logger';
 import { NotFoundError, BusinessRuleError } from '../utils/errors';
 import { bookingService } from './booking.service';
 import { businessService } from './business.service';
-import { routingService } from './routing.service';
 import { featureAccessService } from './feature-access.service';
 import { availabilityService } from './availability.service';
+import { sharedBusinessResolver } from './shared-business-resolver.service';
+import { isWhatsAppFlowEnabled, getConfig } from '../config';
+import { generateFlowToken } from './whatsapp-flow-crypto.service';
+import { parseNavAction, NAV, midFlowContextMessage } from './whatsapp-ui.service';
 
 // 24 hours in milliseconds
 const CONVERSATION_TIMEOUT_MS = 24 * 60 * 60 * 1000;
@@ -435,6 +438,32 @@ class ConversationService {
       interactiveReply 
     }, 'Processing message');
 
+    // ─── NAVIGATION INTERCEPTOR ────────────────────────────────────────
+    // Catches nav actions (back, start over, change salon, edit) before
+    // state-specific handlers. Allows escape from any state without 24h wait.
+    // ─────────────────────────────────────────────────────────────────────
+    const navAction = parseNavAction(interactiveReply?.id, messageText);
+    if (navAction && state !== 'GREETING' && state !== 'AWAITING_ROUTING_CODE') {
+      const navResult = await this.handleNavAction(conversation, navAction, state);
+      if (navResult) return navResult;
+    }
+
+    // If user types "hi"/"hello" mid-flow, show contextual menu instead of wiping session
+    if (state !== 'GREETING' && state !== 'AWAITING_ROUTING_CODE') {
+      const lower = messageText.trim().toLowerCase();
+      if (lower === 'hi' || lower === 'hello' || lower === 'hey') {
+        return {
+          conversationId: conversation.id,
+          state,
+          message: midFlowContextMessage({
+            currentStep: state,
+            businessName: conversation.business?.name || undefined,
+          }),
+          contextData: conversationContextSchema.parse(conversation.contextData || {}),
+        };
+      }
+    }
+
     // ─── LEGACY SWITCH-CASE STATE MACHINE ───────────────────────────────
     // TODO(post-parity): Remove this switch block and the private handle*
     // methods below once the soak window confirms parity (golden tests +
@@ -446,7 +475,7 @@ class ConversationService {
         return this.handleGreeting(conversation);
 
       case 'AWAITING_ROUTING_CODE':
-        return this.handleRoutingCode(conversation, messageText);
+        return this.handleRoutingCode(conversation, messageText, interactiveReply);
 
       case 'SERVICE_SELECTION':
         return this.handleServiceSelection(conversation, messageText, interactiveReply);
@@ -458,6 +487,7 @@ class ConversationService {
         return this.handleConfirmation(conversation, messageText, interactiveReply);
 
       case 'COMPLETED':
+        // Booking is already done. If user taps old confirm button, show "already booked" message.
         if (interactiveReply?.id === 'btn_confirm_booking') {
           const context = conversationContextSchema.parse(conversation.contextData || {});
           if (context.bookingIntentId) {
@@ -469,9 +499,37 @@ class ConversationService {
             }
           }
         }
-        // Reset and start over
-        conversation = await this.updateState(conversation.id, 'GREETING', {});
-        return this.handleGreeting(conversation);
+        // If user taps "Book Again" / start over, reset and restart
+        if (interactiveReply?.id === NAV.START_OVER || navAction === NAV.START_OVER) {
+          if (conversation.businessId) {
+            const updated = await this.updateState(conversation.id, 'SERVICE_SELECTION', {
+              selectedServiceIds: undefined,
+              totalDuration: undefined,
+              totalPrice: undefined,
+              requestedTime: undefined,
+              bookingIntentId: undefined,
+            });
+            return this.showServiceSelection(updated);
+          }
+          conversation = await this.updateState(conversation.id, 'GREETING', {});
+          return this.handleGreeting(conversation);
+        }
+        // Default: show "booking done" card with Book Again button
+        return {
+          conversationId: conversation.id,
+          state: 'COMPLETED',
+          message: {
+            type: 'button',
+            header: { type: 'text', text: '✅ Booking Done' },
+            body: { text: 'Your appointment is confirmed.\n\nWant to book another appointment?' },
+            action: {
+              buttons: [
+                { type: 'reply', reply: { id: NAV.START_OVER, title: '📅 Book Again' } },
+              ],
+            },
+          },
+          contextData: conversationContextSchema.parse(conversation.contextData || {}),
+        };
 
       default:
         return this.handleGreeting(conversation);
@@ -496,10 +554,41 @@ class ConversationService {
       }
     }
 
-    // Move to awaiting routing code
+    // Move to awaiting routing code / business search
     const updated = await this.updateState(conversation.id, 'AWAITING_ROUTING_CODE');
 
-    const welcomeMessage = '👋 Welcome to Salex Booking!\n\nPlease enter the business code (e.g., S1234) to start booking.';
+    // If WhatsApp Flow is enabled, send a Flow CTA message instead of plain text.
+    // The Flow handles salon search in a native UI. If not enabled, fall back to chat.
+    if (isWhatsAppFlowEnabled()) {
+      const config = getConfig();
+      const flowToken = generateFlowToken(conversation.customerPhone);
+
+      // Return a special message type that the outbound worker will send as a Flow CTA.
+      // We encode the Flow info into the message body; the worker detects and handles it.
+      return {
+        conversationId: updated.id,
+        state: 'AWAITING_ROUTING_CODE',
+        message: {
+          type: 'text',
+          body: {
+            text: '👋 Find your salon\n\nTap the button below to search, or type a salon name/code directly.',
+          },
+          // Flow metadata stored in action for the outbound worker to detect
+          action: {
+            button: '__FLOW_CTA__',
+            sections: [{
+              title: 'flow_meta',
+              rows: [{
+                id: config.whatsappFlowId || '',
+                title: flowToken,
+                description: config.whatsappFlowMode,
+              }],
+            }],
+          },
+        } as InteractiveMessage,
+        contextData: {},
+      };
+    }
 
     return {
       conversationId: updated.id,
@@ -507,7 +596,7 @@ class ConversationService {
       message: {
         type: 'text',
         body: {
-          text: welcomeMessage,
+          text: '👋 Find your salon\n\nSearch by salon name, area, address, or enter your salon code.',
         },
       },
       contextData: {},
@@ -520,104 +609,352 @@ class ConversationService {
    */
   private async handleRoutingCode(
     conversation: ConversationWithRelations,
-    messageText: string
+    messageText: string,
+    interactiveReply?: { type: string; id: string; title: string; description?: string }
   ): Promise<ConversationResponse> {
-    // Extract routing code from message
-    const routingCode = this.extractRoutingCode(messageText);
+    // Handle interactive list selection (user tapped a salon from the list)
+    if (interactiveReply?.id?.startsWith('biz_')) {
+      const businessId = interactiveReply.id.replace('biz_', '');
+      return this.handleBusinessSelection(conversation, businessId);
+    }
 
-    if (!routingCode) {
+    // Handle WhatsApp Flow completion (nfm_reply with business_id)
+    if (interactiveReply?.type === 'nfm_reply' && interactiveReply.description) {
+      try {
+        const flowData = JSON.parse(interactiveReply.description);
+        if (flowData.business_id) {
+          logger.info({ businessId: flowData.business_id }, 'Flow completion: business selected');
+          return this.handleBusinessSelection(conversation, flowData.business_id);
+        }
+      } catch {
+        // Fall through to text handling
+      }
+    }
+
+    // Handle Flow completion marker in messageText (fallback detection)
+    if (messageText.startsWith('__FLOW_COMPLETE__:')) {
+      try {
+        const flowData = JSON.parse(messageText.replace('__FLOW_COMPLETE__:', ''));
+        if (flowData.business_id) {
+          logger.info({ businessId: flowData.business_id }, 'Flow completion via messageText marker');
+          return this.handleBusinessSelection(conversation, flowData.business_id);
+        }
+      } catch {
+        // Fall through to text handling
+      }
+    }
+
+    const query = messageText.trim();
+
+    if (!query) {
       return {
         conversationId: conversation.id,
         state: 'AWAITING_ROUTING_CODE',
         message: {
           type: 'text',
           body: {
-            text: '❌ Invalid business code format.\n\nPlease enter a valid code like S1234 or just 1234.',
+            text: '👋 Find your salon\n\nSearch by salon name, area, address, or enter your salon code.',
           },
         },
         contextData: {},
       };
     }
 
+    // Use SharedBusinessResolver for both code and search queries
+    const result = await sharedBusinessResolver.resolve({
+      query,
+      customerPhone: conversation.customerPhone,
+      limit: 7,
+    });
+
+    // ─── No match ─────────────────────────────────────────────────────────
+    if (result.noMatch) {
+      return {
+        conversationId: conversation.id,
+        state: 'AWAITING_ROUTING_CODE',
+        message: {
+          type: 'text',
+          body: {
+            text: `❌ No salon found for "${query}".\n\nTry searching by name, area, or enter a salon code (e.g. 1234).`,
+          },
+        },
+        contextData: {},
+      };
+    }
+
+    // ─── Exact match (routing code or single name match) ──────────────────
+    if (result.exactMatch) {
+      return this.initializeBusinessSession(conversation, result.exactMatch);
+    }
+
+    // ─── Multiple matches — show interactive list ─────────────────────────
+    const rows = result.matches.slice(0, 10).map(biz => ({
+      id: `biz_${biz.id}`,
+      title: biz.name.slice(0, 24),
+      description: [biz.category, biz.slug].filter(Boolean).join(' · ').slice(0, 72) || undefined,
+    }));
+
+    // Store pending matches in context for selection handling
+    const matchIds = result.matches.map(b => ({ id: b.id, name: b.name }));
+    await this.updateState(conversation.id, 'AWAITING_ROUTING_CODE', {
+      businessSearchQuery: query,
+      pendingBusinessMatches: matchIds,
+    } as any);
+
+    return {
+      conversationId: conversation.id,
+      state: 'AWAITING_ROUTING_CODE',
+      message: {
+        type: 'list',
+        header: { type: 'text', text: '🔍 Choose your salon' },
+        body: { text: `Found ${result.matches.length} salons matching "${query}"` },
+        footer: { text: 'Tap to select' },
+        action: {
+          button: 'View Salons',
+          sections: [{ title: 'Salons', rows }],
+        },
+      },
+      contextData: {},
+    };
+  }
+
+  /**
+   * Handle when user selects a business from the interactive list.
+   */
+  private async handleBusinessSelection(
+    conversation: ConversationWithRelations,
+    businessId: string
+  ): Promise<ConversationResponse> {
+    const business = await prisma.business.findUnique({
+      where: { id: businessId },
+      select: {
+        id: true,
+        name: true,
+        routingCode: true,
+        isActive: true,
+        isAcceptingOrders: true,
+      },
+    });
+
+    if (!business || !business.isActive) {
+      return {
+        conversationId: conversation.id,
+        state: 'AWAITING_ROUTING_CODE',
+        message: {
+          type: 'text',
+          body: { text: '❌ This salon is no longer available.\n\nTry searching again.' },
+        },
+        contextData: {},
+      };
+    }
+
+    return this.initializeBusinessSession(conversation, business);
+  }
+
+  /**
+   * Handle navigation actions (back, start over, change salon, edit).
+   * Returns a ConversationResponse if handled, null if not applicable.
+   */
+  private async handleNavAction(
+    conversation: ConversationWithRelations,
+    action: string,
+    currentState: ConversationStateType,
+  ): Promise<ConversationResponse | null> {
+    const context = conversationContextSchema.parse(conversation.contextData || {});
+
+    switch (action) {
+      case NAV.START_OVER: {
+        // Clear booking context, restart with this business's service selection
+        if (conversation.businessId) {
+          const updated = await this.updateState(conversation.id, 'SERVICE_SELECTION', {
+            selectedServiceIds: undefined,
+            totalDuration: undefined,
+            totalPrice: undefined,
+            requestedTime: undefined,
+            bookingIntentId: undefined,
+          });
+          return this.showServiceSelection(updated);
+        }
+        // No business — go to greeting
+        const updated = await this.updateState(conversation.id, 'GREETING', {});
+        return this.handleGreeting(updated);
+      }
+
+      case NAV.CHANGE_SALON: {
+        // Clear everything and go back to business search
+        await prisma.whatsAppConversation.update({
+          where: { id: conversation.id },
+          data: { businessId: null },
+        });
+        const updated = await this.updateState(conversation.id, 'AWAITING_ROUTING_CODE', {
+          selectedServiceIds: undefined,
+          totalDuration: undefined,
+          totalPrice: undefined,
+          requestedTime: undefined,
+          bookingIntentId: undefined,
+        });
+        return {
+          conversationId: updated.id,
+          state: 'AWAITING_ROUTING_CODE',
+          message: {
+            type: 'text',
+            body: { text: '👋 Find your salon\n\nSearch by salon name, area, address, or enter your salon code.' },
+          },
+          contextData: {},
+        };
+      }
+
+      case NAV.EDIT_SERVICES: {
+        // Clear time and booking intent, go to service selection
+        const updated = await this.updateState(conversation.id, 'SERVICE_SELECTION', {
+          requestedTime: undefined,
+          bookingIntentId: undefined,
+        });
+        return this.showServiceSelection(updated);
+      }
+
+      case NAV.EDIT_STAFF: {
+        // Clear time and booking intent, go back to staff (if supported)
+        // For now, treat like edit services since legacy doesn't have staff step
+        const updated = await this.updateState(conversation.id, 'SERVICE_SELECTION', {
+          requestedTime: undefined,
+          bookingIntentId: undefined,
+        });
+        return this.showServiceSelection(updated);
+      }
+
+      case NAV.EDIT_TIME: {
+        // Clear booking intent, go to time selection
+        if (context.selectedServiceIds?.length) {
+          const services = await prisma.service.findMany({
+            where: { id: { in: context.selectedServiceIds } },
+            select: { name: true },
+          });
+          const serviceName = services.map(s => s.name).join(', ') || 'your service';
+          const updated = await this.updateState(conversation.id, 'TIME_SELECTION', {
+            requestedTime: undefined,
+            bookingIntentId: undefined,
+          });
+          return this.showTimeSelection(updated, serviceName);
+        }
+        // No services selected — go to service selection
+        const updated = await this.updateState(conversation.id, 'SERVICE_SELECTION', {
+          requestedTime: undefined,
+          bookingIntentId: undefined,
+        });
+        return this.showServiceSelection(updated);
+      }
+
+      case NAV.BACK: {
+        // Go to previous step based on current state
+        if (currentState === 'CONFIRMATION') {
+          // Back from confirmation → time selection
+          if (context.selectedServiceIds?.length) {
+            const services = await prisma.service.findMany({
+              where: { id: { in: context.selectedServiceIds } },
+              select: { name: true },
+            });
+            const serviceName = services.map(s => s.name).join(', ') || 'your service';
+            const updated = await this.updateState(conversation.id, 'TIME_SELECTION', {
+              requestedTime: undefined,
+              bookingIntentId: undefined,
+            });
+            return this.showTimeSelection(updated, serviceName);
+          }
+          const updated = await this.updateState(conversation.id, 'SERVICE_SELECTION', {});
+          return this.showServiceSelection(updated);
+        }
+        if (currentState === 'TIME_SELECTION') {
+          // Back from time → service selection
+          const updated = await this.updateState(conversation.id, 'SERVICE_SELECTION', {
+            requestedTime: undefined,
+            bookingIntentId: undefined,
+          });
+          return this.showServiceSelection(updated);
+        }
+        if (currentState === 'SERVICE_SELECTION') {
+          // Back from service selection → business search (shared number)
+          if (!conversation.businessId) {
+            const updated = await this.updateState(conversation.id, 'AWAITING_ROUTING_CODE', {});
+            return {
+              conversationId: updated.id,
+              state: 'AWAITING_ROUTING_CODE',
+              message: {
+                type: 'text',
+                body: { text: '👋 Find your salon\n\nSearch by salon name, area, address, or enter your salon code.' },
+              },
+              contextData: {},
+            };
+          }
+          // Dedicated number — can't go back further, show service selection
+          return this.showServiceSelection(conversation);
+        }
+        return null;
+      }
+
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Initialize a business session after successful salon selection.
+   * Checks availability, feature access, and associates the conversation.
+   */
+  private async initializeBusinessSession(
+    conversation: ConversationWithRelations,
+    business: { id: string; name: string; routingCode: string | null; isAcceptingOrders: boolean }
+  ): Promise<ConversationResponse> {
+    // Check if business is accepting orders
+    if (!business.isAcceptingOrders) {
+      return {
+        conversationId: conversation.id,
+        state: 'AWAITING_ROUTING_CODE',
+        message: {
+          type: 'text',
+          body: {
+            text: `🚫 ${business.name} is not accepting bookings right now.\n\nTry another salon or check back later.`,
+          },
+        },
+        contextData: {},
+      };
+    }
+
+    // Check feature access
+    const featureAccess = await featureAccessService.canAccessFeature(business.id, 'whatsapp_booking');
+    if (!featureAccess.allowed) {
+      return {
+        conversationId: conversation.id,
+        state: 'AWAITING_ROUTING_CODE',
+        message: {
+          type: 'text',
+          body: {
+            text: `📞 ${business.name} doesn't have WhatsApp booking enabled.\n\nPlease call them directly to book.`,
+          },
+        },
+        contextData: {},
+      };
+    }
+
+    // Associate conversation with business
+    const routingCode = business.routingCode || '';
     try {
-      // Check business availability (active status, accepting orders)
-      const availability = await routingService.checkBusinessAvailability(routingCode);
-      
-      if (!availability.available) {
-        return {
-          conversationId: conversation.id,
-          state: 'AWAITING_ROUTING_CODE',
-          message: {
-            type: 'text',
-            body: {
-              text: `🚫 ${availability.reason}\n\nPlease try another business code.`,
-            },
-          },
-          contextData: {},
-        };
-      }
-
-      const business = availability.business!;
-
-      // Check if business has WhatsApp booking feature access (plan-based)
-      const featureAccess = await featureAccessService.canAccessFeature(business.id, 'whatsapp_booking');
-      
-      if (!featureAccess.allowed) {
-        logger.info({ 
-          routingCode, 
-          businessId: business.id, 
-          reason: featureAccess.reason 
-        }, 'WhatsApp booking not available for business');
-        
-        return {
-          conversationId: conversation.id,
-          state: 'AWAITING_ROUTING_CODE',
-          message: {
-            type: 'text',
-            body: {
-              text: `📞 This business doesn't have WhatsApp booking enabled.\n\nPlease call ${business.name} directly to book an appointment.`,
-            },
-          },
-          contextData: {},
-        };
-      }
-
-      // Associate with business
       const updated = await this.associateWithBusiness(conversation.id, routingCode);
-      
-      // Update state to service selection
       const withState = await this.updateState(updated.id, 'SERVICE_SELECTION', { routingCode });
-
-      // Get services for the business
       return this.showServiceSelection(withState);
     } catch (error) {
-      if (error instanceof NotFoundError) {
-        return {
-          conversationId: conversation.id,
-          state: 'AWAITING_ROUTING_CODE',
-          message: {
-            type: 'text',
-            body: {
-              text: `❌ Business code "${routingCode}" not found.\n\nPlease check the code and try again.`,
-            },
-          },
-          contextData: {},
-        };
-      }
-      if (error instanceof BusinessRuleError) {
-        return {
-          conversationId: conversation.id,
-          state: 'AWAITING_ROUTING_CODE',
-          message: {
-            type: 'text',
-            body: {
-              text: '🚫 This business is not accepting bookings at this time.\n\nPlease try another business code.',
-            },
-          },
-          contextData: {},
-        };
-      }
-      throw error;
+      // If associateWithBusiness fails (routing code not found), try direct update
+      logger.warn({ businessId: business.id, error }, 'associateWithBusiness failed, trying direct link');
+
+      await prisma.whatsAppConversation.update({
+        where: { id: conversation.id },
+        data: { businessId: business.id, lastMessageAt: new Date() },
+      });
+
+      const withState = await this.updateState(conversation.id, 'SERVICE_SELECTION', {
+        routingCode: business.routingCode || undefined,
+      });
+      return this.showServiceSelection(withState);
     }
   }
 

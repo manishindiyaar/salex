@@ -446,6 +446,10 @@ model WhatsAppMessage {
 }
 
 /// Durable inbound queue for production WhatsApp webhooks.
+/// @deprecated LEGACY — Only used when WHATSAPP_QUEUE_BACKEND=db.
+/// With Redis/BullMQ, inbound messages go through the whatsapp:inbound queue.
+/// This table is retained for transitional fallback only. Can be dropped after
+/// Redis is stable in production for 2+ weeks.
 model WhatsAppInboundEvent {
   id              String    @id @default(cuid())
   waMessageId     String    @unique
@@ -472,6 +476,10 @@ model WhatsAppInboundEvent {
 }
 
 /// Durable outbox for WhatsApp messages sent to Meta.
+/// @deprecated LEGACY — Only used when WHATSAPP_QUEUE_BACKEND=db.
+/// With Redis/BullMQ, outbound messages go through the whatsapp:outbound queue.
+/// This table is retained for transitional fallback only. Can be dropped after
+/// Redis is stable in production for 2+ weeks.
 model WhatsAppOutboundMessage {
   id                String    @id @default(cuid())
   idempotencyKey    String    @unique
@@ -489,6 +497,9 @@ model WhatsAppOutboundMessage {
   error             String?
   createdAt         DateTime  @default(now())
   sentAt            DateTime?
+  // Conversation version this response was generated for. Used to drop stale
+  // outbound messages when the conversation has since advanced (see worker).
+  conversationVersion Int?
 
   @@index([status, nextAttemptAt])
   @@index([conversationId])
@@ -517,6 +528,9 @@ model BookingIntent {
 }
 
 /// Cross-process lock used by DB-backed WhatsApp workers.
+/// @deprecated LEGACY — Only used when WHATSAPP_QUEUE_BACKEND=db.
+/// With Redis/BullMQ, locking uses Redis SET NX. Can be dropped after
+/// Redis is stable in production for 2+ weeks.
 model WhatsAppProcessingLock {
   lockKey   String   @id
   lockedAt  DateTime @default(now())

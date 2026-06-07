@@ -26,6 +26,7 @@ import { adminFlowRoutes, adminFlowReadinessRoutes, adminFlowContextRoutes } fro
 import { adminSimulatorRoutes } from './admin-simulator.routes';
 import { adminWhatsAppChannelRoutes } from './admin-whatsapp-channel.routes';
 import flowRoutes from './flow.routes';
+import { whatsappFlowRoutes } from './whatsapp-flow.routes';
 import { areSimulatorRoutesEnabled } from '../config';
 
 const router: Router = Router();
@@ -55,6 +56,7 @@ router.use('/api/v1/businesses/:businessId/availability', availabilityRoutes);
 router.use('/api/v1/services', serviceRoutes);
 router.use('/api/v1/bookings', bookingRoutes);
 router.use('/api/v1/flows', flowRoutes);
+router.use('/api/v1/whatsapp/flows', whatsappFlowRoutes);
 router.use('/api/v1/webhooks', webhookRoutes);
 // Meta dashboard callback URLs are easy to enter without the /api prefix.
 // Keep this alias so /v1/webhooks/whatsapp verifies too.

@@ -1,3 +1,18 @@
+/**
+ * @deprecated LEGACY DB POLLING WORKER
+ *
+ * This service implements the PostgreSQL-based polling queue for WhatsApp
+ * message processing. It is ONLY started when WHATSAPP_QUEUE_BACKEND=db.
+ *
+ * With Redis/BullMQ (WHATSAPP_QUEUE_BACKEND=redis), this service is NOT used.
+ * The BullMQ workers in src/workers/ replace this entirely.
+ *
+ * REMOVAL: Safe to delete once Redis has been stable in production for 2+ weeks
+ * and no traffic uses the DB backend. The tables it depends on
+ * (WhatsAppInboundEvent, WhatsAppOutboundMessage, WhatsAppProcessingLock)
+ * can also be dropped at that point.
+ */
+
 import { Prisma, prisma } from '@salex/shared-types';
 import type { InteractiveMessage } from './conversation.service';
 import { engineRouter } from './engine-router.service';
@@ -17,6 +32,7 @@ type InboundEventRow = {
   interactiveText: string | null;
   payload: unknown;
   attempts: number;
+  createdAt: Date;
 };
 
 type OutboundMessageRow = {
@@ -26,10 +42,21 @@ type OutboundMessageRow = {
   phoneNumberId: string | null;
   payload: unknown;
   attempts: number;
+  createdAt: Date;
+  conversationVersion: number | null;
 };
 
 const MAX_ATTEMPTS = 5;
 const LOCK_STALE_MS = 2 * 60 * 1000;
+
+/**
+ * Max age for an outbound message before it's considered too stale to send.
+ * Interactive booking replies that wait longer than this are almost certainly
+ * obsolete (the user has moved on or a long outage occurred). 90s gives the
+ * normal retry backoff schedule [10,30,...] room to succeed while preventing
+ * minutes-late deliveries.
+ */
+const OUTBOUND_MAX_AGE_MS = 90 * 1000;
 
 class WhatsAppDbWorkerService {
   private inboundTimer?: NodeJS.Timeout;
@@ -37,6 +64,10 @@ class WhatsAppDbWorkerService {
   private processingInbound = false;
   private processingOutbound = false;
   private readonly workerId = `${process.pid}-${Math.random().toString(36).slice(2)}`;
+
+  // Kick flags — set to true to trigger immediate processing on next check
+  private inboundKickPending = false;
+  private outboundKickPending = false;
 
   start(): void {
     if (this.inboundTimer || this.outboundTimer) {
@@ -69,6 +100,46 @@ class WhatsAppDbWorkerService {
     }
 
     logger.info({ workerId: this.workerId }, 'WhatsApp DB workers stopped');
+  }
+
+  /**
+   * Kick the inbound worker to process immediately instead of waiting
+   * up to 1000ms for the next interval tick. Safe to call multiple times;
+   * concurrent processing is prevented by the processingInbound flag.
+   *
+   * Future: Replace with Redis pub/sub or BullMQ event for multi-instance.
+   */
+  kickInbound(): void {
+    if (this.processingInbound) {
+      // Already running — the current tick will pick up new events
+      return;
+    }
+    this.inboundKickPending = true;
+    // Use setImmediate to avoid blocking the caller and allow the
+    // current event loop turn to complete (preserves idempotency checks)
+    setImmediate(() => {
+      if (this.inboundKickPending) {
+        this.inboundKickPending = false;
+        void this.processInboundTick();
+      }
+    });
+  }
+
+  /**
+   * Kick the outbound worker to send immediately.
+   * Same safety guarantees as kickInbound.
+   */
+  kickOutbound(): void {
+    if (this.processingOutbound) {
+      return;
+    }
+    this.outboundKickPending = true;
+    setImmediate(() => {
+      if (this.outboundKickPending) {
+        this.outboundKickPending = false;
+        void this.processOutboundTick();
+      }
+    });
   }
 
   private async processInboundTick(): Promise<void> {
@@ -164,6 +235,7 @@ class WhatsAppDbWorkerService {
   }
 
   private async processInboundEvent(event: InboundEventRow): Promise<void> {
+    const processingStartedAt = Date.now();
     const lockKey = `whatsapp:${event.customerPhone}`;
     const locked = await this.acquireProcessingLock(lockKey);
 
@@ -189,6 +261,7 @@ class WhatsAppDbWorkerService {
           }
         : undefined;
 
+      const routeStartedAt = Date.now();
       const response = await engineRouter.route({
         customerPhone: event.customerPhone,
         messageText: event.messageText || event.interactiveText || '',
@@ -196,6 +269,7 @@ class WhatsAppDbWorkerService {
         businessId: event.businessId || undefined,
         phoneNumberId: event.phoneNumberId || undefined,
       });
+      const responseGeneratedAt = Date.now();
 
       await whatsappMessageAuditService.storeInbound({
         conversationId: response.conversationId,
@@ -216,6 +290,15 @@ class WhatsAppDbWorkerService {
         WHERE "id" = ${response.conversationId}
       `;
 
+      // Read the conversation's current version to stamp on the outbound message.
+      // If the conversation advances past this version before the message is sent,
+      // the outbound worker will drop it as stale (prevents late/duplicate screens).
+      const convForVersion = await prisma.whatsAppConversation.findUnique({
+        where: { id: response.conversationId },
+        select: { version: true },
+      });
+      const conversationVersion = convForVersion?.version ?? null;
+
       await prisma.whatsAppOutboundMessage.upsert({
         where: { idempotencyKey: `inbound:${event.waMessageId}:response` },
         update: {},
@@ -226,8 +309,23 @@ class WhatsAppDbWorkerService {
           phoneNumberId: event.phoneNumberId,
           messageType: response.message.type,
           payload: response.message as unknown as Prisma.InputJsonValue,
+          conversationVersion,
         },
       });
+
+      // Kick outbound worker immediately to reduce reply latency
+      this.kickOutbound();
+
+      // ─── Observability: timing log (no PII, no message body) ──────────
+      const outboundQueuedAt = Date.now();
+      const eventCreatedAt = new Date(event.createdAt).getTime();
+      logger.info({
+        eventId: event.id,
+        engine: response.engine,
+        queue_wait_ms: processingStartedAt - eventCreatedAt,
+        response_generation_ms: responseGeneratedAt - routeStartedAt,
+        total_processing_ms: outboundQueuedAt - processingStartedAt,
+      }, 'Inbound event processed — outbound queued');
 
       await prisma.whatsAppInboundEvent.update({
         where: { id: event.id },
@@ -248,11 +346,98 @@ class WhatsAppDbWorkerService {
 
   private async processOutboundMessage(message: OutboundMessageRow): Promise<void> {
     const payload = message.payload as InteractiveMessage;
+    const sendStartedAt = Date.now();
+
+    // ─── STALE MESSAGE GUARD ───────────────────────────────────────────
+    // Drop outbound messages whose conversation has already advanced past
+    // the version this response was generated for. This prevents a delayed
+    // message (e.g. after a retry following a transient send failure) from
+    // overwriting the conversation's current screen with an outdated one.
+    if (message.conversationVersion != null) {
+      const conv = await prisma.whatsAppConversation.findUnique({
+        where: { id: message.conversationId },
+        select: { version: true },
+      });
+
+      // If the conversation's current version is higher than the version this
+      // message was generated for, the message is stale — drop it.
+      if (conv && conv.version > message.conversationVersion) {
+        await prisma.whatsAppOutboundMessage.update({
+          where: { id: message.id },
+          data: {
+            status: 'SKIPPED',
+            error: `stale: generated for v${message.conversationVersion}, conversation now at v${conv.version}`,
+            lockedAt: null,
+            lockedBy: null,
+          },
+        });
+        logger.info({
+          outboundMessageId: message.id,
+          conversationId: message.conversationId,
+          generatedForVersion: message.conversationVersion,
+          currentVersion: conv.version,
+        }, 'Dropped stale outbound message');
+        return;
+      }
+    }
+
+    // ─── AGE-BASED EXPIRY SAFETY NET ────────────────────────────────────
+    // Even without a version mismatch, a message that has been waiting far
+    // longer than any reasonable reply window is almost certainly stale
+    // (e.g. queued during a long outage). Drop it rather than surprise the user.
+    const ageMs = Date.now() - new Date(message.createdAt).getTime();
+    if (ageMs > OUTBOUND_MAX_AGE_MS) {
+      await prisma.whatsAppOutboundMessage.update({
+        where: { id: message.id },
+        data: {
+          status: 'SKIPPED',
+          error: `expired: ${Math.round(ageMs / 1000)}s old (max ${OUTBOUND_MAX_AGE_MS / 1000}s)`,
+          lockedAt: null,
+          lockedBy: null,
+        },
+      });
+      logger.info({
+        outboundMessageId: message.id,
+        conversationId: message.conversationId,
+        ageSeconds: Math.round(ageMs / 1000),
+      }, 'Dropped expired outbound message');
+      return;
+    }
 
     try {
-      const sendResult = await whatsappService.sendMessage(message.toPhone, payload, {
-        phoneNumberId: message.phoneNumberId || undefined,
-      });
+      let sendResult;
+
+      // Detect Flow CTA messages (marked with __FLOW_CTA__ button sentinel)
+      const isFlowCta = payload.action?.button === '__FLOW_CTA__'
+        && payload.action?.sections?.[0]?.title === 'flow_meta';
+
+      if (isFlowCta) {
+        // Extract Flow metadata from the encoded message
+        const flowMeta = payload.action!.sections![0].rows[0];
+        const flowId = flowMeta.id;
+        const flowToken = flowMeta.title;
+        const flowMode = (flowMeta.description as 'draft' | 'published') || 'draft';
+
+        const flowPayload = whatsappService.buildFlowCtaPayload(message.toPhone, {
+          flowId,
+          flowToken,
+          flowMode,
+          bodyText: payload.body.text,
+          ctaText: 'Find Salon',
+          footerText: 'Search by name, area, or code',
+        });
+
+        sendResult = await whatsappService.sendRawPayload(flowPayload, {
+          phoneNumberId: message.phoneNumberId || undefined,
+        });
+      } else {
+        // Normal interactive/text message
+        sendResult = await whatsappService.sendMessage(message.toPhone, payload, {
+          phoneNumberId: message.phoneNumberId || undefined,
+        });
+      }
+
+      const sendCompletedAt = Date.now();
 
       const providerMessageId = sendResult.messages?.[0]?.id;
 
@@ -267,6 +452,14 @@ class WhatsAppDbWorkerService {
           error: null,
         },
       });
+
+      // ─── Observability: send timing ────────────────────────────────────
+      const messageCreatedAt = new Date(message.createdAt).getTime();
+      logger.info({
+        outboundMessageId: message.id,
+        outbound_queue_wait_ms: sendStartedAt - messageCreatedAt,
+        meta_send_ms: sendCompletedAt - sendStartedAt,
+      }, 'Outbound message sent');
 
       const conversation = await prisma.whatsAppConversation.findUnique({
         where: { id: message.conversationId },
@@ -362,6 +555,8 @@ class WhatsAppDbWorkerService {
 
     logger.warn({
       outboundMessageId: message.id,
+      toPhone: message.toPhone,
+      phoneNumberId: message.phoneNumberId,
       attempts: message.attempts,
       failed,
       error: serialized,
@@ -399,7 +594,16 @@ class WhatsAppDbWorkerService {
 
   private serializeError(error: unknown): string {
     if (error instanceof Error) {
-      return error.message;
+      // Include meta/cause if available (e.g. BusinessRuleError with Meta API response)
+      const base = error.message;
+      const meta = (error as any).meta;
+      if (meta && Array.isArray(meta) && meta.length > 0) {
+        return `${base} | meta: ${meta[0]}`;
+      }
+      if (error.cause) {
+        return `${base} | cause: ${String(error.cause)}`;
+      }
+      return base;
     }
     return String(error);
   }

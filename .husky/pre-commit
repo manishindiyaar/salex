@@ -1,5 +1,2 @@
-#!/usr/bin/env sh
-. "$(dirname "$0")/_/h"
-
 pnpm db:check-migration
 pnpm exec lint-staged

@@ -29,6 +29,7 @@ import { useHaptics } from '../../hooks/useHaptics';
 import { useBookingStore } from '../../store/bookingStore';
 import { useBusinessStore } from '../../store/businessStore';
 import { CalculatorText } from './CalculatorText';
+import { canCallPhone, formatDisplayPhone, openPhoneDialer } from '../../utils/phone';
 
 interface BookingSlot {
   id: string;
@@ -362,10 +363,34 @@ export const BookingDetailDrawer: React.FC<BookingDetailDrawerProps> = ({
             {/* Customer Info */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>CUSTOMER</Text>
-              <View style={styles.customerRow}>
-                <Icon name="phone" size={16} color={Colors.TEXT_SECONDARY} />
-                <Text style={styles.customerText}>{booking.customerPhone}</Text>
-              </View>
+              {canCallPhone(booking.customerPhone) ? (
+                <>
+                  <View style={styles.customerRow}>
+                    <Icon name="phone" size={16} color={Colors.TEXT_SECONDARY} />
+                    <Text style={styles.customerText}>
+                      {formatDisplayPhone(booking.customerPhone)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.callCustomerButton}
+                    onPress={() => {
+                      haptics.light();
+                      openPhoneDialer(booking.customerPhone);
+                    }}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Call customer"
+                    accessibilityRole="button"
+                  >
+                    <Icon name="phone" size={16} color={Colors.SALEX_GREEN} />
+                    <Text style={styles.callCustomerText}>Call Customer</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={styles.customerRow}>
+                  <Icon name="user" size={16} color={Colors.TEXT_TERTIARY} />
+                  <Text style={styles.noContactText}>No contact number saved</Text>
+                </View>
+              )}
               {booking.source === 'whatsapp' && (
                 <View style={styles.sourceRow}>
                   <Text style={styles.sourceEmoji}>💬</Text>
@@ -614,6 +639,29 @@ const styles = StyleSheet.create({
   customerText: {
     ...Typography.Body1,
     color: Colors.TEXT,
+  },
+  noContactText: {
+    ...Typography.Body1,
+    color: Colors.TEXT_TERTIARY,
+    fontStyle: 'italic',
+  },
+  callCustomerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.SM,
+    marginTop: Spacing.SM,
+    paddingVertical: Spacing.SM,
+    paddingHorizontal: Spacing.MD,
+    backgroundColor: Colors.SALEX_GREEN + '15',
+    borderRadius: BorderRadius.MD,
+    borderWidth: 1,
+    borderColor: Colors.SALEX_GREEN + '30',
+    alignSelf: 'flex-start',
+  },
+  callCustomerText: {
+    ...Typography.Body2,
+    color: Colors.SALEX_GREEN,
+    fontWeight: '600',
   },
   sourceRow: {
     flexDirection: 'row',

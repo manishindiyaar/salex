@@ -1,7 +1,11 @@
 /**
  * HomeScreen (Command Center)
- * 
- * High-Strength UI for the main dashboard.
+ *
+ * Premium revenue-first dashboard:
+ * - Business name + date
+ * - Today's earnings block
+ * - Today's schedule using compact RevenueBookingCards
+ * - FAB for quick booking creation
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -9,29 +13,50 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   ScrollView,
   RefreshControl,
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@expo/vector-icons/Feather';
+
+// LinearGradient — works in production/preview builds, gracefully falls back in Expo Go
+let LinearGradient: any = null;
+try {
+  const mod = require('expo-linear-gradient');
+  // Test if the native view is actually registered (won't be in Expo Go without rebuild)
+  const { UIManager, Platform } = require('react-native');
+  const viewName = 'ExpoLinearGradient';
+  const isAvailable = Platform.OS === 'ios'
+    ? UIManager.getViewManagerConfig?.(viewName) != null
+    : UIManager.hasViewManagerConfig?.(viewName) ?? false;
+  if (isAvailable || mod.LinearGradient?.__isNative === undefined) {
+    // Try to use it — if native not available, we'll catch at next level
+    LinearGradient = mod.LinearGradient;
+  }
+} catch (e) {
+  // Not available
+}
+// Final safety: if LinearGradient but native crashes, just don't use it
+// We'll just always use the fallback View in Expo Go
+const USE_GRADIENT = false; // Set to true after native rebuild includes expo-linear-gradient
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { RootTabParamList } from '../../navigation/TabNavigator';
 
 import {
   RevenueBlock,
-  GatedChaiBreakToggle,
   FloatingRequestCard,
   CheckoutDrawer,
   RevenueBurst,
   SlotCreatorDrawer,
   BookingDetailDrawer,
+  RevenueBookingCard,
 } from '@components/high-strength';
-import type { 
-  PendingBooking, 
+import type {
+  PendingBooking,
   CheckoutBooking,
   PaymentMethod,
 } from '@components/high-strength';
@@ -45,6 +70,7 @@ import { useFeatureAccess } from '../../hooks/useFeatureAccess';
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<BottomTabNavigationProp<RootTabParamList>>();
+  const insets = useSafeAreaInsets();
   const { business, loading: businessLoading, fetchMe } = useBusinessStore();
   const { items: bookings, listByBusiness } = useBookingStore();
   const { items: services, listByBusiness: loadServices } = useServiceStore();
@@ -52,7 +78,6 @@ const HomeScreen: React.FC = () => {
   const haptics = useHaptics();
   const whatsappAccess = useFeatureAccess('whatsapp_booking');
 
-  const [isChaiBreakActive, setIsChaiBreakActive] = useState(true);
   const [todayRevenue, setTodayRevenue] = useState(0);
   const [todayBookingsCount, setTodayBookingsCount] = useState(0);
   const [showRevenueBurst, setShowRevenueBurst] = useState(false);
@@ -65,62 +90,24 @@ const HomeScreen: React.FC = () => {
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
 
-  // Helper functions for slot cards
-  const getStatusColor = (status: string): string => {
-    switch (status) {
-      case 'PENDING': return '#FFA500';
-      case 'CONFIRMED': return Colors.SALEX_GREEN;
-      case 'COMPLETED': return '#4CAF50';
-      case 'CANCELLED_BY_USER':
-      case 'CANCELLED_BY_SALON':
-      case 'REJECTED': return Colors.ERROR;
-      default: return Colors.TEXT_SECONDARY;
-    }
-  };
-
-  const formatTime = (isoString: string): string => {
-    const date = new Date(isoString);
-    return date.toLocaleTimeString('en-IN', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
-
-  const formatTimeRange = (startIso: string, endIso: string): string => {
-    return `${formatTime(startIso)} – ${formatTime(endIso)}`;
-  };
-
-
   useEffect(() => {
     if (!business && !businessLoading) {
       fetchMe();
     }
   }, [business, businessLoading, fetchMe]);
 
-  // Load bookings and services when business is available
   useEffect(() => {
     if (business?.id) {
-      console.log('📚 Loading bookings and services for business:', business.id);
       listByBusiness(business.id);
       loadServices(business.id);
     }
   }, [business?.id, listByBusiness, loadServices]);
 
-  // Debug: Log bookings when they change
-  useEffect(() => {
-    console.log('📅 Bookings updated:', bookings.length, 'bookings');
-    if (bookings.length > 0) {
-      console.log('📅 First booking:', JSON.stringify(bookings[0], null, 2));
-    }
-  }, [bookings]);
-
   useEffect(() => {
     if (bookings && bookings.length > 0) {
       const today = new Date().toDateString();
       const todayBookingsList = bookings.filter((b: any) => {
-        const bookingDate = new Date(b.scheduledAt).toDateString();
-        return bookingDate === today;
+        return new Date(b.scheduledAt).toDateString() === today;
       });
       const completedToday = todayBookingsList.filter((b: any) => b.status === 'COMPLETED');
       const revenue = completedToday.reduce((sum: number, b: any) => {
@@ -137,14 +124,14 @@ const HomeScreen: React.FC = () => {
     }
   }, [bookings, lastMilestone, haptics]);
 
-  // Create a map of service IDs to names for quick lookup
+  // Service map for name lookup
   const serviceMap = React.useMemo(() => {
     const map: Record<string, string> = {};
     services.forEach(s => { map[s.id] = s.name; });
     return map;
   }, [services]);
 
-  // Today's bookings for schedule display
+  // Today's bookings
   interface TodaySlot {
     id: string;
     serviceName: string;
@@ -160,40 +147,29 @@ const HomeScreen: React.FC = () => {
   }
 
   const todaySlots: TodaySlot[] = React.useMemo(() => {
-    console.log('📅 Computing todaySlots, bookings:', bookings.length, bookings);
     if (!bookings || bookings.length === 0) return [];
     const today = new Date().toDateString();
     const filtered = bookings.filter((b: any) => new Date(b.scheduledAt).toDateString() === today);
-    console.log('📅 Today bookings:', filtered.length, filtered);
-    
+
     return filtered
       .map((b: any) => {
-        // Try to get service name from booking items or services
         let serviceName = 'Walk-in Service';
-        
-        console.log('📦 Processing booking:', b.id, 'items:', b.items, 'serviceIds:', b.serviceIds);
-        
-        // If booking has items array with service info (from backend)
         if (b.items && Array.isArray(b.items) && b.items.length > 0) {
           const names = b.items.map((item: any) => {
-            // Backend returns nameSnapshot in BookingItem
             return item.nameSnapshot || item.service?.name || serviceMap[item.serviceId] || 'Service';
           });
           serviceName = names.join(', ');
         } else if (b.serviceIds && Array.isArray(b.serviceIds) && b.serviceIds.length > 0) {
-          // If booking has serviceIds array
           const names = b.serviceIds.map((id: string) => serviceMap[id] || 'Service');
           serviceName = names.join(', ');
         }
-        
-        console.log('📦 Booking mapped:', b.id, 'serviceName:', serviceName, 'price:', b.totalPrice);
-        
+
         return {
           id: b.id,
           serviceName,
-          customerPhone: b.customer?.phoneNumber || b.customerId || 'Walk-in',
+          customerPhone: b.customer?.phoneNumber || b.customerPhone || 'Walk-in',
           scheduledAt: b.scheduledAt,
-          endAt: b.endAt || b.scheduledAt, // fallback to start if no end
+          endAt: b.endAt || b.scheduledAt,
           totalPrice: Number(b.totalPrice) || 0,
           status: b.status,
           source: b.source || 'manual',
@@ -202,7 +178,7 @@ const HomeScreen: React.FC = () => {
           staff: b.staff || null,
         };
       })
-      .sort((a: TodaySlot, b: TodaySlot) => 
+      .sort((a: TodaySlot, b: TodaySlot) =>
         new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime()
       );
   }, [bookings, serviceMap]);
@@ -222,12 +198,6 @@ const HomeScreen: React.FC = () => {
     }
   }, [fetchMe, business?.id, listByBusiness, loadServices]);
 
-  const handleChaiBreakToggle = useCallback((active: boolean) => {
-    setIsChaiBreakActive(active);
-    haptics.medium();
-    if (!active) setPendingRequest(null);
-  }, [haptics]);
-
   const handleSlotPress = useCallback((slot: any) => {
     haptics.light();
     setSelectedBooking(slot);
@@ -236,21 +206,17 @@ const HomeScreen: React.FC = () => {
 
   const handleAcceptRequest = useCallback(async (bookingId: string) => {
     haptics.heavy();
-    console.log('Accept:', bookingId);
     setPendingRequest(null);
   }, [haptics]);
 
   const handleDenyRequest = useCallback(async (bookingId: string) => {
     haptics.heavy();
-    console.log('Deny:', bookingId);
     setPendingRequest(null);
   }, [haptics]);
 
   const handleCheckout = useCallback(async (bookingId: string, paymentMethod: PaymentMethod) => {
     haptics.heavy();
-    console.log('💳 Checkout:', bookingId, 'via', paymentMethod);
-    
-    // Check if business is suspended before processing checkout
+
     if (business && business.isActive === false) {
       Alert.alert(
         'Account Suspended',
@@ -261,48 +227,33 @@ const HomeScreen: React.FC = () => {
       setCheckoutBooking(null);
       return;
     }
-    
+
     try {
-      // Call the booking store's complete method to update status via API
       await useBookingStore.getState().complete(bookingId, paymentMethod);
-      console.log('✅ Checkout completed successfully');
     } catch (error: any) {
-      console.error('❌ Checkout failed:', error);
-      
-      // Check if it's a suspension error
       if (error.message && error.message.includes('Business account is suspended')) {
-        Alert.alert(
-          'Account Suspended',
-          'Your business account has been suspended. Checkout operations are not available. Please contact support.',
-          [{ text: 'OK' }]
-        );
+        Alert.alert('Account Suspended', 'Your business account has been suspended.', [{ text: 'OK' }]);
         setShowCheckout(false);
         setCheckoutBooking(null);
         return;
       }
     }
-    
+
     setShowCheckout(false);
     setCheckoutBooking(null);
-    
-    // Refresh bookings list
     if (business?.id) await listByBusiness(business.id);
   }, [haptics, business, listByBusiness]);
 
   const handleFabPress = useCallback(() => {
     haptics.light();
-    // Force load services before opening drawer
-    if (business?.id) {
-      console.log('🔄 Force loading services before opening drawer...');
-      loadServices(business.id);
-    }
+    if (business?.id) loadServices(business.id);
     setShowSlotCreator(true);
   }, [haptics, business?.id, loadServices]);
 
   const handleLogout = useCallback(() => {
     Alert.alert('Sign Out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: () => logout() }
+      { text: 'Sign Out', style: 'destructive', onPress: () => logout() },
     ]);
   }, [logout]);
 
@@ -310,102 +261,108 @@ const HomeScreen: React.FC = () => {
     weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
   });
 
-
   return (
-    <SafeAreaView style={[styles.container, !isChaiBreakActive && styles.containerClosed]}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.BACKGROUND} />
-      
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.SALEX_GREEN} />
+
+      {/* Fixed green backdrop — only covers the top, shows on pull-down refresh */}
+      <View style={[styles.greenBackdrop, { height: insets.top + 300 }]} />
+
       <ScrollView
         style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={Colors.SALEX_GREEN}
+            tintColor={Colors.SURFACE}
             colors={[Colors.SALEX_GREEN]}
           />
         }
       >
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.businessName}>{business?.name || 'Your Business'}</Text>
-            <Text style={styles.dateText}>{dateString}</Text>
+        {/* Green gradient top zone — Chime-style diagonal sheen */}
+        {USE_GRADIENT && LinearGradient ? (
+          <LinearGradient
+            colors={['#0A3D29', '#0F5C3C', '#1C8A57', '#0D4A30']}
+            locations={[0, 0.45, 0.72, 1]}
+            start={{ x: 0.05, y: 0 }}
+            end={{ x: 0.95, y: 1 }}
+            style={[styles.greenZone, { paddingTop: insets.top + Spacing.MD }]}
+          >
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerLeft}>
+                <Text style={styles.businessName}>{business?.name || 'Your Business'}</Text>
+                <Text style={styles.dateText}>{dateString}</Text>
+              </View>
+              <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                <Icon name="log-out" size={18} color={Colors.SURFACE} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Revenue Block */}
+            <View style={styles.revenueSection}>
+              <RevenueBlock todayRevenue={todayRevenue} todayBookings={todayBookingsCount} />
+            </View>
+          </LinearGradient>
+        ) : (
+          <View style={[styles.greenZone, styles.greenZoneFallback, { paddingTop: insets.top + Spacing.MD }]}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerLeft}>
+                <Text style={styles.businessName}>{business?.name || 'Your Business'}</Text>
+                <Text style={styles.dateText}>{dateString}</Text>
+              </View>
+              <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                <Icon name="log-out" size={18} color={Colors.SURFACE} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Revenue Block */}
+            <View style={styles.revenueSection}>
+              <RevenueBlock todayRevenue={todayRevenue} todayBookings={todayBookingsCount} />
+            </View>
           </View>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Icon name="log-out" size={20} color={Colors.ERROR} />
-          </TouchableOpacity>
-        </View>
+        )}
 
-        <View style={styles.revenueSection}>
-          <RevenueBlock todayRevenue={todayRevenue} todayBookings={todayBookingsCount} />
-        </View>
-
-        <View style={styles.chaiBreakSection}>
-          <GatedChaiBreakToggle isActive={isChaiBreakActive} onToggle={handleChaiBreakToggle} />
-        </View>
-
+        {/* Today's Schedule */}
         <View style={styles.scheduleSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>TODAY'S SCHEDULE</Text>
-            {todaySlots.length > 3 && (
-              <Text style={styles.sectionCount}>{todaySlots.length} total</Text>
-            )}
+            <Text style={styles.sectionCount}>
+              {todaySlots.length} booking{todaySlots.length !== 1 ? 's' : ''}
+            </Text>
           </View>
-          
+
           {todaySlots.length === 0 ? (
             <View style={styles.emptyState}>
-              <Icon name="calendar" size={48} color={Colors.TEXT_TERTIARY} />
+              <Icon name="calendar" size={32} color={Colors.TEXT_TERTIARY} />
               <Text style={styles.emptyText}>No bookings today</Text>
               <Text style={styles.emptySubtext}>Tap + to create a manual booking</Text>
             </View>
           ) : (
             <View style={styles.slotsList}>
-              {todaySlots.slice(0, 3).map(slot => {
-                const statusColor = getStatusColor(slot.status);
-                const isCompleted = slot.status === 'COMPLETED';
-                const isCancelled = slot.status.includes('CANCELLED') || slot.status === 'REJECTED';
-                
-                return (
-                  <TouchableOpacity
-                    key={slot.id}
-                    style={[
-                      styles.slotCard,
-                      isCompleted && styles.slotCardCompleted,
-                      isCancelled && styles.slotCardCancelled,
-                    ]}
-                    onPress={() => handleSlotPress(slot)}
-                    activeOpacity={0.7}
-                  >
-                    {/* Left color indicator */}
-                    <View style={[styles.slotIndicator, { backgroundColor: statusColor }]} />
-                    
-                    {/* Content */}
-                    <View style={styles.slotContent}>
-                      <Text style={styles.slotTimeText}>
-                        {formatTimeRange(slot.scheduledAt, slot.endAt)}
-                      </Text>
-                      <Text style={styles.slotServiceText} numberOfLines={1}>
-                        {slot.serviceName}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-              
-              {todaySlots.length > 3 && (
-                <TouchableOpacity 
+              {todaySlots.map(slot => (
+                <RevenueBookingCard
+                  key={slot.id}
+                  booking={slot}
+                  compact
+                  onPress={() => handleSlotPress(slot)}
+                />
+              ))}
+
+              {todaySlots.length > 5 && (
+                <TouchableOpacity
                   style={styles.showMoreButton}
                   onPress={() => {
                     haptics.light();
                     navigation.navigate('Bookings');
                   }}
-                  activeOpacity={0.7}
+                  activeOpacity={0.8}
                 >
-                  <Text style={styles.showMoreText}>
-                    Show {todaySlots.length - 3} more booking{todaySlots.length - 3 !== 1 ? 's' : ''}
-                  </Text>
-                  <Icon name="chevron-right" size={18} color={Colors.SALEX_GREEN} />
+                  <Text style={styles.showMoreText}>View all in Bookings</Text>
+                  <Icon name="chevron-right" size={16} color={Colors.SALEX_GREEN} />
                 </TouchableOpacity>
               )}
             </View>
@@ -413,11 +370,13 @@ const HomeScreen: React.FC = () => {
         </View>
       </ScrollView>
 
-      <TouchableOpacity style={styles.fab} onPress={handleFabPress} activeOpacity={0.8}>
-        <Icon name="plus" size={28} color={Colors.BACKGROUND} />
+      {/* FAB */}
+      <TouchableOpacity style={styles.fab} onPress={handleFabPress} activeOpacity={0.85}>
+        <Icon name="plus" size={26} color={Colors.BACKGROUND} />
       </TouchableOpacity>
 
-      {pendingRequest && isChaiBreakActive && whatsappAccess.allowed && (
+      {/* Overlays */}
+      {pendingRequest && whatsappAccess.allowed && (
         <FloatingRequestCard
           booking={pendingRequest}
           onAccept={handleAcceptRequest}
@@ -453,34 +412,47 @@ const HomeScreen: React.FC = () => {
         amount={todayRevenue}
         onComplete={() => setShowRevenueBurst(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.BACKGROUND },
-  containerClosed: { backgroundColor: Colors.CHAI_BREAK_OFF_BG },
+  greenBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#0D4F35',
+  },
   scrollContainer: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+  greenZone: {
+    paddingHorizontal: Spacing.LG,
+    paddingBottom: Spacing.XL,
+    borderBottomLeftRadius: BorderRadius.XL,
+    borderBottomRightRadius: BorderRadius.XL,
+  },
+  greenZoneFallback: {
+    backgroundColor: '#0D4F35',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.LG,
-    paddingTop: Spacing.LG,
-    paddingBottom: Spacing.MD,
+    paddingTop: Spacing.MD,
+    paddingBottom: Spacing.SM,
   },
   headerLeft: { flex: 1 },
-  businessName: { ...Typography.H2, color: Colors.TEXT, marginBottom: Spacing.XS },
-  dateText: { ...Typography.Body2, color: Colors.TEXT_SECONDARY },
+  businessName: { ...Typography.H2, color: Colors.SURFACE, marginBottom: 2 },
+  dateText: { ...Typography.Body2, color: 'rgba(255, 255, 255, 0.75)' },
   logoutButton: {
     padding: Spacing.SM,
-    backgroundColor: Colors.ERROR + '20',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
     borderRadius: BorderRadius.MD,
   },
-  revenueSection: { paddingHorizontal: Spacing.LG, paddingVertical: Spacing.MD },
-  chaiBreakSection: { paddingHorizontal: Spacing.LG, paddingVertical: Spacing.MD },
-  scheduleSection: { paddingHorizontal: Spacing.LG, paddingTop: Spacing.LG, paddingBottom: 100 },
+  revenueSection: { paddingVertical: Spacing.SM },
+  scheduleSection: { paddingHorizontal: Spacing.LG, paddingTop: Spacing.LG, paddingBottom: 200, backgroundColor: Colors.BACKGROUND, flexGrow: 1 },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -491,45 +463,13 @@ const styles = StyleSheet.create({
     ...Typography.Caption,
     color: Colors.TEXT_SECONDARY,
     letterSpacing: 1,
+    fontWeight: '700',
   },
   sectionCount: {
     ...Typography.Caption,
     color: Colors.TEXT_TERTIARY,
   },
-  slotsList: { gap: Spacing.SM },
-  slotCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.SURFACE,
-    borderRadius: BorderRadius.MD,
-    overflow: 'hidden',
-  },
-  slotCardCompleted: {
-    opacity: 0.6,
-  },
-  slotCardCancelled: {
-    opacity: 0.4,
-  },
-  slotIndicator: {
-    width: 4,
-    height: '100%',
-    minHeight: 56,
-  },
-  slotContent: {
-    flex: 1,
-    paddingVertical: Spacing.MD,
-    paddingHorizontal: Spacing.LG,
-  },
-  slotTimeText: {
-    ...Typography.Body1,
-    color: Colors.TEXT,
-    fontWeight: '600',
-  },
-  slotServiceText: {
-    ...Typography.Caption,
-    color: Colors.TEXT_SECONDARY,
-    marginTop: 2,
-  },
+  slotsList: { gap: 0 },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -544,12 +484,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Spacing.MD,
-    marginTop: Spacing.SM,
     backgroundColor: Colors.SURFACE,
     borderRadius: BorderRadius.LG,
     borderWidth: 1,
-    borderColor: Colors.SALEX_GREEN + '40',
-    gap: Spacing.XS,
+    borderColor: Colors.SALEX_GREEN + '30',
+    gap: 6,
   },
   showMoreText: {
     ...Typography.Body2,
@@ -560,9 +499,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 24,
     right: 24,
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: Colors.SALEX_GREEN,
     justifyContent: 'center',
     alignItems: 'center',
