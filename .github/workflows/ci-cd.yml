@@ -67,7 +67,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate
     if: github.event_name == 'push' && (github.ref_name == 'develop' || github.ref_name == 'staging')
-    environment: staging
     env:
       DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
       DIRECT_URL: ${{ secrets.STAGING_DIRECT_URL }}
