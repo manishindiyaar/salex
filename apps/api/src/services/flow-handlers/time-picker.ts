@@ -192,7 +192,7 @@ export const timePickerHandler: NodeHandler = {
   },
 
   async process(args: NodeProcessArgs): Promise<NodeResult> {
-    const { incomingMessage, interactiveReply, config, context } = args;
+    const { incomingMessage, interactiveReply } = args;
 
     let selectedTime: string | null = null;
 

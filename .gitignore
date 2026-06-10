@@ -42,6 +42,11 @@ pnpm-debug.log*
 .claude/
 .clinerules
 
+# Local WhatsApp Flow test artifacts
+/flow_asset.json
+/flow_private.pem
+/flow_public.pem
+
 # Native app output
 apps/*/ios/Pods/
 apps/*/ios/build/

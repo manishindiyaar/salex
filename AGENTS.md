@@ -153,6 +153,28 @@ pnpm db:migrate -- --name describe_your_change
 pnpm db:migrate:deploy
 ```
 
+## Revamp Baseline Docs
+
+Before planning or implementing the next Salex platform revamp work, read these source-of-truth docs:
+
+- `docs/salex-salon-premium-app-master-plan.md`
+- `docs/whatsapp/shared-number-webview-booking-plan.md`
+- `docs/whatsapp/14-whatsapp-crm-sso-integration.md`
+
+Supporting context:
+
+- `docs/salon-merchant-app-revamp-prd.md`
+- `docs/salon-merchant-app-premium-user-story.md`
+- `docs/whatsapp/13-meta-platform-strategy-2026.md`
+
+Core product rule:
+
+```text
+Booking engine first. Business operations around it. WhatsApp as the customer channel.
+```
+
+Do not start new revamp implementation by copying external CRM/database/auth architecture. Salex API and Salex PostgreSQL remain the source of truth.
+
 ## Before Reporting Work Complete
 
 For code changes, run the relevant checks. For broad changes, run:
@@ -170,5 +192,7 @@ For documentation-only changes, say that tests were not run because no runtime c
 
 Read:
 
+- `docs/developer-onboarding-git-cicd.md`
 - `docs/git-workflow.md`
 - `docs/deployment-pipeline.md`
+- `docs/README.md`

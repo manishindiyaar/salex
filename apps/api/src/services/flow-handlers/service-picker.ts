@@ -102,7 +102,7 @@ export const servicePickerHandler: NodeHandler = {
   },
 
   async process(args: NodeProcessArgs): Promise<NodeResult> {
-    const { incomingMessage, interactiveReply, businessId, config } = args;
+    const { incomingMessage, interactiveReply, businessId } = args;
 
     // Get active services for validation
     const services = await prisma.service.findMany({

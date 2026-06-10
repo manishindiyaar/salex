@@ -47,7 +47,7 @@ export const confirmationHandler: NodeHandler = {
   autoAdvance: false,
 
   async render(args: NodeRenderArgs): Promise<InteractiveMessage> {
-    const { config, context, businessId } = args;
+    const { config, context } = args;
 
     const headerText = (config.header as string) || DEFAULTS.header;
     const confirmLabel = (config.confirmLabel as string) || DEFAULTS.confirmLabel;

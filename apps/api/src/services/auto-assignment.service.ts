@@ -9,7 +9,8 @@
 import { prisma, Prisma } from '@salex/shared-types';
 import { logger } from '../utils/logger';
 import { ConflictError } from '../utils/errors';
-import { availabilityService, AvailableResource, AvailableStaff } from './availability.service';
+import { availabilityService } from './availability.service';
+import type { AvailableResource, AvailableStaff } from './availability.types';
 
 export interface AssignmentPreferences {
   preferredResourceId?: string;

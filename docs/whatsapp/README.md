@@ -19,6 +19,7 @@ This folder contains the complete technical documentation for Salex's WhatsApp-b
 | [Complete Product Flow](./11-complete-product-flow.md) | Full E2E data flow: all actors, API endpoints, auth, booking lifecycle, schema |
 | [Redis + BullMQ Queue](./12-redis-bullmq-queue.md) | Railway Redis setup, BullMQ architecture, job payloads, migration guide |
 | [Meta Platform Strategy 2026](./13-meta-platform-strategy-2026.md) | Meta platform updates, account model roadmap, conversation ownership, billing, AI strategy |
+| [WhatsApp CRM Subdomain SSO](./14-whatsapp-crm-sso-integration.md) | Premium CRM subdomain positioning, wacrm fork strategy, SSO, phone/password fallback, CRM bootstrap |
 
 ## Quick Start for New Developers
 
@@ -26,7 +27,8 @@ This folder contains the complete technical documentation for Salex's WhatsApp-b
 2. Then [Webhook & Message Pipeline](./02-webhook-message-pipeline.md) to understand the data flow
 3. Then [Engine Router](./03-engine-router-state-machine.md) to understand routing decisions
 4. Then [Meta Platform Strategy 2026](./13-meta-platform-strategy-2026.md) to understand upcoming account, billing, and multi-partner changes
-5. Run the API locally and send a WhatsApp message to the test number to see it end-to-end
+5. Then [WhatsApp CRM Subdomain SSO](./14-whatsapp-crm-sso-integration.md) if you are working on premium dedicated-number CRM
+6. Run the API locally and send a WhatsApp message to the test number to see it end-to-end
 
 ## Key Files Map
 

@@ -2,8 +2,16 @@ import React, { useEffect, useState, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { Layout } from '@/components';
-import { LoginPage, DashboardPage, BusinessesPage, BusinessDetailPage, PaymentsPage, AnalyticsPage, SystemHealthPage, AuditLogPage, BusinessFlowListPage, BusinessFlowEditorPage } from '@/pages';
-import { FlowBusinessSelectorPage } from '@/pages/FlowBusinessSelectorPage';
+import {
+  LoginPage,
+  DashboardPage,
+  BusinessesPage,
+  BusinessDetailPage,
+  PaymentsPage,
+  AnalyticsPage,
+  SystemHealthPage,
+  AuditLogPage,
+} from '@/pages';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuthStore();
@@ -111,57 +119,6 @@ function App() {
           element={
             <ProtectedRoute>
               <AuditLogPage />
-            </ProtectedRoute>
-          }
-        />
-        {/* Business-scoped flow routes */}
-        <Route
-          path="/businesses/:businessId/flows"
-          element={
-            <ProtectedRoute>
-              <BusinessFlowListPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/businesses/:businessId/flows/new"
-          element={
-            <ProtectedRoute>
-              <BusinessFlowEditorPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/businesses/:businessId/flows/:id/edit"
-          element={
-            <ProtectedRoute>
-              <BusinessFlowEditorPage />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* /flows — Business selector for flow management */}
-        <Route
-          path="/flows"
-          element={
-            <ProtectedRoute>
-              <FlowBusinessSelectorPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/flows/new"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/flows" replace />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/flows/:id/edit"
-          element={
-            <ProtectedRoute>
-              <Navigate to="/flows" replace />
             </ProtectedRoute>
           }
         />
