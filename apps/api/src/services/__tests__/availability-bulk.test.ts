@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { availabilityService, BulkAvailabilityData, BulkBookingRow } from '../availability.service';
+import { availabilityService } from '../availability.service';
+import type { BulkAvailabilityData, BulkBookingRow } from '../availability.types';
 
 describe('AvailabilityService - Bulk Methods', () => {
   // Helper to create a BulkAvailabilityData object

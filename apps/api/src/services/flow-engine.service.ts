@@ -30,12 +30,12 @@
  */
 
 import { prisma } from '@salex/shared-types';
-import type { FlowDefinition, FlowEdge, FlowNode } from '@salex/shared-types';
+import type { FlowDefinition } from '@salex/shared-types';
 import { resolveNextNode } from './flow-engine/resolve-next-node';
 import type { FlowContext } from './flow-engine/resolve-next-node';
 import { flowService } from './flow.service';
 import type { InteractiveMessage } from './conversation.service';
-import type { NodeHandler, NodeHandlerMap, NodeRenderArgs, NodeProcessArgs } from './flow-handlers/types';
+import type { NodeHandlerMap, NodeRenderArgs, NodeProcessArgs } from './flow-handlers/types';
 import { messageHandler } from './flow-handlers/message';
 import { questionHandler } from './flow-handlers/question';
 import { servicePickerHandler } from './flow-handlers/service-picker';

@@ -104,7 +104,7 @@ export const bookingHandler: NodeHandler = {
   },
 
   async process(args: NodeProcessArgs): Promise<NodeResult> {
-    const { incomingMessage, interactiveReply, config, context, businessId } = args;
+    const { incomingMessage, interactiveReply, context, businessId } = args;
 
     // Determine if this is a confirm or cancel action
     const isConfirm =

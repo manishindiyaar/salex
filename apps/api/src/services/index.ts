@@ -15,7 +15,6 @@ export { provisioningService } from './provisioning.service';
 export { routingService } from './routing.service';
 export { serviceService } from './service.service';
 export { simulatorMessageService } from './simulator-message.service';
-export { simulatorService } from './simulator.service';
 export { subscriptionService } from './subscription.service';
 export { tokenService, type TokenPayload } from './token.service';
 export { twilioService } from './twilio.service';

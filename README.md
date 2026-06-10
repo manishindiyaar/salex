@@ -1,6 +1,6 @@
-# Rebook
+# Salex
 
-Minimal monorepo for the Rebook merchant apps, admin dashboard, shared types, and API.
+Salex is a WhatsApp-first appointment and salon operations platform. The core product is the booking engine: business operations sit around it, and WhatsApp is the customer channel.
 
 ## Apps
 
@@ -37,6 +37,7 @@ pnpm dev:clinic
 pnpm build
 pnpm test
 pnpm lint
+pnpm type-check
 ```
 
 ## Database
@@ -70,8 +71,18 @@ pnpm db:migrate:deploy
 
 ## Architecture
 
+- [Documentation index](docs/README.md)
+- [Developer onboarding and CI/CD](docs/developer-onboarding-git-cicd.md)
+- [Git workflow](docs/git-workflow.md)
 - [Deployment pipeline](docs/deployment-pipeline.md)
-- [Admin-provisioned merchant auth with future OTP migration](docs/auth-transition-architecture.md)
-- [Claude Code implementation prompt for admin provisioning](docs/claude-code-admin-provisioning-implementation-prompt.md)
+- [WhatsApp documentation](docs/whatsapp/README.md)
+
+## Revamp Baseline
+
+Read these before starting the next major platform build:
+
+- [Salon premium app master plan](docs/salex-salon-premium-app-master-plan.md)
+- [Shared number webview booking plan](docs/whatsapp/shared-number-webview-booking-plan.md)
+- [WhatsApp CRM subdomain SSO plan](docs/whatsapp/14-whatsapp-crm-sso-integration.md)
 
 Generated output such as `dist`, `.turbo`, logs, and TypeScript build info should stay out of git.

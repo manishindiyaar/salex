@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   X, LogOut, Home, Users, CreditCard,
-  Activity, FileText, GitBranch,
+  Activity, FileText,
   ChevronRight, Bell,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
@@ -16,7 +16,6 @@ const NAV_ITEMS = [
   { icon: Home,          label: 'Dashboard',     href: '/' },
   { icon: Users,         label: 'Businesses',    href: '/businesses' },
   { icon: CreditCard,    label: 'Payments',      href: '/payments' },
-  { icon: GitBranch,     label: 'Flows',         href: '/flows' },
   { icon: Activity,      label: 'System Health', href: '/system-health' },
   { icon: FileText,      label: 'Audit Logs',    href: '/audit-logs' },
 ];
@@ -25,7 +24,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/':              'Dashboard',
   '/businesses':    'Businesses',
   '/payments':      'Payments',
-  '/flows':         'Flows',
   '/system-health': 'System Health',
   '/audit-logs':    'Audit Logs',
 };
@@ -49,8 +47,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Compute page title
   const pageTitle =
     PAGE_TITLES[location.pathname] ??
-    (location.pathname.startsWith('/businesses/') ? 'Business Detail' :
-     location.pathname.startsWith('/flows/') ? 'Flow Editor' : 'Admin');
+    (location.pathname.startsWith('/businesses/') ? 'Business Detail' : 'Admin');
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: '#FCFCFA' }}>

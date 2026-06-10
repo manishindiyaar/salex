@@ -14,77 +14,28 @@
 
 import { prisma } from '@salex/shared-types';
 import { logger } from '../utils/logger';
+import * as availabilityRules from './availability-rules';
+import type {
+  AvailabilityResult,
+  CapacityInfo,
+  AvailableResource,
+  AvailableStaff,
+  SuggestedAssignment,
+  AvailabilityWithSuggestions,
+  BulkAvailabilityData,
+} from './availability.types';
 
-export interface AvailabilityResult {
-  available: boolean;
-  currentCount: number;
-  maxCapacity: number;
-  message?: string;
-}
-
-export interface TimeSlot {
-  scheduledAt: Date;
-  endAt: Date;
-}
-
-export interface CapacityInfo {
-  activeResources: number;
-  activeStaff: number;
-  effectiveCapacity: number;
-  warning?: 'staff_shortage' | 'resource_shortage' | 'zero_capacity';
-  warningMessage?: string;
-}
-
-export interface AvailableResource {
-  id: string;
-  name: string;
-  utilizationPercent: number;
-  isLinkedStaffAvailable: boolean;
-}
-
-export interface AvailableStaff {
-  id: string;
-  name: string;
-  utilizationPercent: number;
-  linkedResourceIds: string[];
-}
-
-export interface SuggestedAssignment {
-  resourceId: string;
-  resourceName: string;
-  staffId: string;
-  staffName: string;
-  reason: 'lowest_utilization' | 'linked_pair_available' | 'customer_preference';
-}
-
-export interface AvailabilityWithSuggestions {
-  available: boolean;
-  availableResources: AvailableResource[];
-  availableStaff: AvailableStaff[];
-  suggestedAssignment: SuggestedAssignment | null;
-  effectiveCapacity: number;
-  currentUtilization: number;
-  message?: string;
-}
-
-// ============================================
-// Bulk Availability Types (Req 6.1–6.6)
-// ============================================
-
-export interface BulkBookingRow {
-  id: string;
-  scheduledAt: Date;
-  endAt: Date;
-  resourceId: string | null;
-  staffId: string | null;
-}
-
-export interface BulkAvailabilityData {
-  effectiveCapacity: number;       // min(activeResources, activeStaff) (Req 6.3)
-  bookings: BulkBookingRow[];      // PENDING|CONFIRMED overlapping [start,end)
-  activeResourceCount: number;
-  activeStaffCount: number;
-}
+export type {
+  AvailabilityResult,
+  TimeSlot,
+  CapacityInfo,
+  AvailableResource,
+  AvailableStaff,
+  SuggestedAssignment,
+  AvailabilityWithSuggestions,
+  BulkBookingRow,
+  BulkAvailabilityData,
+} from './availability.types';
 
 class AvailabilityService {
   /**
@@ -611,15 +562,7 @@ class AvailabilityService {
     slotStart: Date,
     slotEnd: Date,
   ): boolean {
-    if (data.effectiveCapacity <= 0) {
-      return false;
-    }
-
-    const overlapCount = data.bookings.filter(
-      (b) => b.scheduledAt < slotEnd && b.endAt > slotStart
-    ).length;
-
-    return overlapCount < data.effectiveCapacity;
+    return availabilityRules.isSlotBookable(data, slotStart, slotEnd);
   }
 
   /**
@@ -641,49 +584,14 @@ class AvailabilityService {
     slotStart: Date,
     slotEnd: Date,
   ): boolean {
-    // If no resources or no staff configured, not bookable
-    if (data.activeResourceCount <= 0 || data.activeStaffCount <= 0) {
-      return false;
-    }
-
-    // Find bookings that overlap with this specific slot
-    const overlapping = data.bookings.filter(
-      (b) => b.scheduledAt < slotEnd && b.endAt > slotStart
-    );
-
-    // Count distinct busy resource IDs (only non-null resourceIds count)
-    const busyResourceIds = new Set<string>();
-    for (const b of overlapping) {
-      if (b.resourceId !== null) {
-        busyResourceIds.add(b.resourceId);
-      }
-    }
-
-    // Count distinct busy staff IDs (only non-null staffIds count)
-    const busyStaffIds = new Set<string>();
-    for (const b of overlapping) {
-      if (b.staffId !== null) {
-        busyStaffIds.add(b.staffId);
-      }
-    }
-
-    // A resource is "available" if it's not in the busy set
-    // availableResources = activeResourceCount - busyResourceIds.size
-    const availableResourceCount = data.activeResourceCount - busyResourceIds.size;
-
-    // A staff member is "available" if it's not in the busy set
-    // availableStaff = activeStaffCount - busyStaffIds.size
-    const availableStaffCount = data.activeStaffCount - busyStaffIds.size;
-
-    // Legacy: available = availableResources.length > 0 && availableStaff.length > 0
-    return availableResourceCount > 0 && availableStaffCount > 0;
+    return availabilityRules.isSlotBookableLegacyParity(data, slotStart, slotEnd);
   }
 
   /**
    * Calculate end time from start time and total duration
    */
   calculateEndTime(scheduledAt: Date, totalDurationMinutes: number): Date {
-    return new Date(scheduledAt.getTime() + totalDurationMinutes * 60 * 1000);
+    return availabilityRules.calculateEndTime(scheduledAt, totalDurationMinutes);
   }
 }
 
